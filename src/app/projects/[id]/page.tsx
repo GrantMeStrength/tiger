@@ -137,38 +137,17 @@ export default function ProjectPage() {
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <Link href="/" style={{ color: "var(--color-text-faint)", textDecoration: "none", fontSize: "13px" }}>
-            🐯 Tiger
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <Link href="/" style={{ color: "var(--color-text-faint)", textDecoration: "none", fontSize: "12px" }}>
+            Tiger
           </Link>
-          <span style={{ color: "var(--color-text-faint)" }}>/</span>
-          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text)" }}>{project.name}</span>
-          <span
-            style={{
-              fontSize: "10px",
-              color: "var(--color-text-faint)",
-              fontFamily: "var(--font-mono)",
-              background: "var(--color-surface)",
-              border: "1px solid var(--color-border-subtle)",
-              borderRadius: "4px",
-              padding: "2px 6px",
-            }}
-          >
+          <span style={{ color: "var(--color-border)", fontSize: "11px" }}>/</span>
+          <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--color-text)" }}>{project.name}</span>
+          <span style={{ fontSize: "11px", color: "var(--color-text-faint)", fontFamily: "var(--font-mono)" }}>
             {project.repoPath.split("/").slice(-2).join("/")}
           </span>
           {runningCount > 0 && (
-            <span
-              style={{
-                fontSize: "11px",
-                color: "var(--color-running)",
-                background: "rgba(88,166,255,0.1)",
-                border: "1px solid rgba(88,166,255,0.3)",
-                borderRadius: "10px",
-                padding: "2px 8px",
-                fontWeight: 600,
-              }}
-            >
-              <span className="pulse-dot" style={{ display: "inline-block", width: "5px", height: "5px", borderRadius: "50%", background: "var(--color-running)", marginRight: "5px", verticalAlign: "middle" }} />
+            <span style={{ fontSize: "11px", color: "var(--color-running)" }}>
               {runningCount} running
             </span>
           )}
@@ -177,17 +156,27 @@ export default function ProjectPage() {
         <button
           onClick={() => setShowLaunch(true)}
           style={{
-            padding: "7px 16px",
-            background: "var(--color-accent)",
-            border: "none",
-            borderRadius: "6px",
-            color: "white",
-            fontSize: "13px",
-            fontWeight: 600,
+            padding: "8px 16px",
+            background: "none",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text-muted)",
+            fontSize: "12px",
+            fontWeight: 500,
             cursor: "pointer",
+            letterSpacing: "0.01em",
+          }}
+          onMouseEnter={(e) => {
+            const b = e.currentTarget as HTMLButtonElement;
+            b.style.borderColor = "var(--color-accent)";
+            b.style.color = "var(--color-accent)";
+          }}
+          onMouseLeave={(e) => {
+            const b = e.currentTarget as HTMLButtonElement;
+            b.style.borderColor = "var(--color-border)";
+            b.style.color = "var(--color-text-muted)";
           }}
         >
-          + Launch Agent
+          Launch Agent
         </button>
       </header>
 
@@ -195,24 +184,24 @@ export default function ProjectPage() {
       <div style={{ display: "flex", borderBottom: "1px solid var(--color-border-subtle)", flexShrink: 0, paddingLeft: "8px" }}>
         {(["sessions", "plan", "git"] as const).map((tab) => {
           const labels: Record<ActiveTab, string> = {
-            sessions: `💬 Sessions${agents.length > 0 ? ` (${agents.length})` : ""}`,
-            plan: "📋 Plan",
-            git: "🌿 Git",
+            sessions: `Sessions${agents.length > 0 ? ` (${agents.length})` : ""}`,
+            plan: "Plan",
+            git: "Git",
           };
           return (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               style={{
-                padding: "10px 18px",
+                padding: "12px 20px",
                 background: "none",
                 border: "none",
-                borderBottom: `2px solid ${activeTab === tab ? "var(--color-accent)" : "transparent"}`,
+                borderBottom: `1px solid ${activeTab === tab ? "var(--color-accent)" : "transparent"}`,
                 color: activeTab === tab ? "var(--color-text)" : "var(--color-text-faint)",
                 cursor: "pointer",
-                fontSize: "13px",
-                fontWeight: activeTab === tab ? 600 : 400,
-                transition: "color 0.12s",
+                fontSize: "12px",
+                fontWeight: activeTab === tab ? 500 : 400,
+                letterSpacing: "0.01em",
               }}
             >
               {labels[tab]}
@@ -309,14 +298,13 @@ export default function ProjectPage() {
                       flexShrink: 0,
                     }}
                   >
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text)" }}>
-                      💻 {selectedAgent.label}
+                    <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--color-text)" }}>
+                      {selectedAgent.label}
                     </span>
                     <span
                       style={{
                         fontSize: "11px",
                         color: selectedAgent.status === "running" ? "var(--color-running)" : "var(--color-text-faint)",
-                        fontWeight: 600,
                       }}
                     >
                       {selectedAgent.status}
@@ -325,7 +313,7 @@ export default function ProjectPage() {
                       {project.repoPath.split("/").pop()}
                     </span>
                   </div>
-                  <div style={{ flex: 1, overflow: "hidden", background: "#0d1117" }}>
+                  <div style={{ flex: 1, overflow: "hidden", background: "#141312" }}>
                     <TerminalAgentView agentId={selectedAgent.id} />
                   </div>
                 </div>
@@ -343,8 +331,8 @@ export default function ProjectPage() {
                         flexShrink: 0,
                       }}
                     >
-                      <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text)" }}>
-                        🤖 {selectedAgent.label}
+                      <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--color-text)" }}>
+                        {selectedAgent.label}
                       </span>
                       <span style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: "var(--color-text-faint)" }}>
                         {selectedAgent.command} {selectedAgent.flags.join(" ")}

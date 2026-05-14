@@ -25,20 +25,10 @@ const STATUS_COLOR: Record<AgentRecord["status"], string> = {
   killed: "var(--color-text-faint)",
 };
 
-function formatElapsed(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
 export function AgentCard({ agent, selected, onSelect, onKill, onRemove }: Props) {
   const color = STATUS_COLOR[agent.status];
-  const icon = STATUS_ICON[agent.status];
   const isRunning = agent.status === "running";
 
-  // Live-updating elapsed timer for running agents
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!isRunning) return;
@@ -52,120 +42,63 @@ export function AgentCard({ agent, selected, onSelect, onKill, onRemove }: Props
   return (
     <div
       onClick={onSelect}
-      className="animate-in"
       style={{
-        padding: "12px 14px",
-        borderRadius: "8px",
+        padding: "14px 16px",
         cursor: "pointer",
-        border: `1px solid ${selected ? "var(--color-accent)" : "var(--color-border-subtle)"}`,
+        borderLeft: `2px solid ${selected ? "var(--color-accent)" : isRunning ? "var(--color-running)" : "transparent"}`,
         background: selected ? "var(--color-surface-raised)" : "transparent",
-        transition: "all 0.12s",
+        transition: "background 0.1s",
       }}
       onMouseEnter={(e) => {
-        if (!selected)
-          (e.currentTarget as HTMLDivElement).style.background = "var(--color-surface-raised)";
+        if (!selected) (e.currentTarget as HTMLDivElement).style.background = "var(--color-surface)";
       }}
       onMouseLeave={(e) => {
-        if (!selected)
-          (e.currentTarget as HTMLDivElement).style.background = "transparent";
+        if (!selected) (e.currentTarget as HTMLDivElement).style.background = "transparent";
       }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-        {/* Status icon */}
-        <span
-          className={isRunning ? "spin" : ""}
-          style={{
-            color,
-            fontSize: "14px",
-            marginTop: "1px",
-            flexShrink: 0,
-            display: "inline-block",
-          }}
-        >
-          {icon}
-        </span>
-
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: "13px",
-              fontWeight: 600,
-              color: "var(--color-text)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
+          {/* Label */}
+          <div style={{ fontSize: "12px", fontWeight: 500, color: "var(--color-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: "3px" }}>
             {agent.label}
           </div>
 
+          {/* Task preview */}
           {agent.task && (
-            <div
-              style={{
-                fontSize: "11px",
-                color: "var(--color-text-muted)",
-                marginTop: "2px",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
+            <div style={{ fontSize: "11px", color: "var(--color-text-muted)", marginBottom: "6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {agent.task}
             </div>
           )}
 
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              marginTop: "6px",
-              alignItems: "center",
-            }}
-          >
-            <span style={{ fontSize: "10px", color, fontWeight: 600 }}>
+          {/* Status row */}
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <span style={{ fontSize: "11px", color, letterSpacing: "0.01em" }}>
               {agent.status}
             </span>
-            <span style={{ fontSize: "10px", color: "var(--color-text-faint)" }}>
+            <span style={{ fontSize: "11px", color: "var(--color-text-faint)" }}>
               {elapsedStr}
             </span>
-            {agent.agentType === "terminal" ? (
-              <span style={{ fontSize: "9px", color: "var(--color-text-faint)", letterSpacing: "0.03em" }}>
-                💻 terminal
+            {agent.agentType === "terminal" && (
+              <span style={{ fontSize: "10px", color: "var(--color-text-faint)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                term
               </span>
-            ) : (
-              agent.flags.length > 0 && (
-                <span
-                  style={{
-                    fontSize: "10px",
-                    color: "var(--color-text-faint)",
-                    fontFamily: "var(--font-mono)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    maxWidth: "120px",
-                  }}
-                >
-                  {agent.flags.join(" ")}
-                </span>
-              )
             )}
           </div>
         </div>
 
-        {/* Actions */}
-        <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-          {isRunning && (
+        {/* Action button */}
+        <div style={{ flexShrink: 0, paddingTop: "1px" }}>
+          {isRunning ? (
             <button
               onClick={(e) => { e.stopPropagation(); onKill(agent.id); }}
               style={actionBtn}
               onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-error)"; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-faint)"; }}
-              title="Kill agent"
+              title="Stop"
             >
-              ■
+              ◼
             </button>
-          )}
-          {!isRunning && (
+          ) : (
             <button
               onClick={(e) => { e.stopPropagation(); onRemove(agent.id); }}
               style={actionBtn}
@@ -173,7 +106,7 @@ export function AgentCard({ agent, selected, onSelect, onKill, onRemove }: Props
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-faint)"; }}
               title="Remove"
             >
-              ✕
+              ×
             </button>
           )}
         </div>
@@ -182,6 +115,13 @@ export function AgentCard({ agent, selected, onSelect, onKill, onRemove }: Props
   );
 }
 
+function formatElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
 const actionBtn: React.CSSProperties = {
   background: "none",
   border: "none",

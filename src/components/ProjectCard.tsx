@@ -11,7 +11,6 @@ interface Props {
 
 export function ProjectCard({ project, agentCounts, onDelete }: Props) {
   const router = useRouter();
-
   const hasRunning = agentCounts.running > 0;
 
   return (
@@ -19,145 +18,92 @@ export function ProjectCard({ project, agentCounts, onDelete }: Props) {
       className="animate-in"
       style={{
         background: "var(--color-surface)",
-        border: `1px solid ${hasRunning ? "var(--color-running)" : "var(--color-border)"}`,
-        borderRadius: "10px",
-        padding: "18px 20px",
+        padding: "28px 32px",
         cursor: "pointer",
-        transition: "border-color 0.15s, box-shadow 0.15s",
         position: "relative",
+        borderLeft: hasRunning ? `2px solid var(--color-running)` : "2px solid transparent",
+        transition: "background 0.1s",
       }}
       onClick={() => router.push(`/projects/${project.id}`)}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "0 0 0 1px var(--color-accent)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
-      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "var(--color-surface-raised)"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = "var(--color-surface)"; }}
     >
-      {/* Running indicator */}
-      {hasRunning && (
-        <span
-          className="pulse-dot"
-          style={{
-            position: "absolute",
-            top: "16px",
-            right: "16px",
-            width: "8px",
-            height: "8px",
-            borderRadius: "50%",
-            background: "var(--color-running)",
-            display: "block",
-          }}
-        />
-      )}
-
-      <div style={{ marginBottom: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
-        <span style={{ fontSize: "16px" }}>📁</span>
-        <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text)" }}>
-          {project.name}
-        </span>
+      {/* Project name */}
+      <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--color-text)", marginBottom: "6px", letterSpacing: "-0.005em" }}>
+        {project.name}
       </div>
 
-      <div
-        style={{
-          fontSize: "11px",
-          color: "var(--color-text-faint)",
-          fontFamily: "var(--font-mono)",
-          marginBottom: "14px",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
+      {/* Repo path */}
+      <div style={{ fontSize: "11px", color: "var(--color-text-faint)", fontFamily: "var(--font-mono)", marginBottom: "16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {project.repoPath}
       </div>
 
       {project.description && (
-        <div
-          style={{
-            fontSize: "12px",
-            color: "var(--color-text-muted)",
-            marginBottom: "14px",
-            lineHeight: 1.4,
-          }}
-        >
+        <div style={{ fontSize: "12px", color: "var(--color-text-muted)", marginBottom: "16px", lineHeight: 1.6 }}>
           {project.description}
         </div>
       )}
 
-      {/* Agent counts */}
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+      {/* Status line */}
+      <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
         {agentCounts.running > 0 && (
-          <Chip label={`${agentCounts.running} running`} color="var(--color-running)" />
+          <span style={{ fontSize: "11px", color: "var(--color-running)" }}>
+            {agentCounts.running} running
+          </span>
         )}
         {agentCounts.completed > 0 && (
-          <Chip label={`${agentCounts.completed} done`} color="var(--color-success)" />
+          <span style={{ fontSize: "11px", color: "var(--color-text-faint)" }}>
+            {agentCounts.completed} done
+          </span>
         )}
         {agentCounts.failed > 0 && (
-          <Chip label={`${agentCounts.failed} failed`} color="var(--color-error)" />
+          <span style={{ fontSize: "11px", color: "var(--color-error)" }}>
+            {agentCounts.failed} failed
+          </span>
         )}
         {agentCounts.total === 0 && (
-          <Chip label="no agents" color="var(--color-text-faint)" />
+          <span style={{ fontSize: "11px", color: "var(--color-text-faint)" }}>no sessions</span>
         )}
       </div>
 
-      {/* Default command */}
-      <div
-        style={{
-          marginTop: "12px",
-          fontSize: "11px",
-          color: "var(--color-text-faint)",
-          fontFamily: "var(--font-mono)",
-        }}
-      >
-        {project.defaultCommand} {project.defaultFlags.join(" ")}
-      </div>
-
-      {/* Delete button */}
+      {/* Delete — visible on hover only */}
       <button
         onClick={(e) => {
           e.stopPropagation();
-          if (confirm(`Delete project "${project.name}"?`)) onDelete(project.id);
+          if (confirm(`Delete "${project.name}"?`)) onDelete(project.id);
         }}
         style={{
           position: "absolute",
-          bottom: "14px",
-          right: "14px",
+          top: "20px",
+          right: "20px",
           background: "none",
           border: "none",
           cursor: "pointer",
           color: "var(--color-text-faint)",
-          fontSize: "14px",
-          padding: "2px 4px",
-          borderRadius: "4px",
+          fontSize: "11px",
+          padding: "4px",
+          opacity: 0,
+          transition: "opacity 0.1s, color 0.1s",
         }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "var(--color-error)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-faint)";
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-error)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-faint)"; }}
+        ref={(el) => {
+          if (!el) return;
+          const parent = el.closest("[data-card]") ?? el.parentElement;
+          parent?.addEventListener("mouseenter", () => { el.style.opacity = "1"; });
+          parent?.addEventListener("mouseleave", () => { el.style.opacity = "0"; });
         }}
         title="Delete project"
       >
-        ✕
+        ×
       </button>
     </div>
   );
 }
 
-function Chip({ label, color }: { label: string; color: string }) {
-  return (
-    <span
-      style={{
-        fontSize: "11px",
-        color,
-        background: `${color}1a`,
-        border: `1px solid ${color}44`,
-        borderRadius: "12px",
-        padding: "2px 8px",
-      }}
-    >
-      {label}
-    </span>
-  );
+
+interface Props {
+  project: Project;
+  agentCounts: { running: number; completed: number; failed: number; killed: number; total: number };
+  onDelete: (id: string) => void;
 }

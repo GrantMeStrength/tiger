@@ -1,22 +1,29 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #0d1117;
-  --color-surface: #161b22;
-  --color-surface-raised: #1c2128;
-  --color-border: #30363d;
-  --color-border-subtle: #21262d;
-  --color-text: #e6edf3;
-  --color-text-muted: #8b949e;
-  --color-text-faint: #484f58;
-  --color-accent: #f97316;
-  --color-accent-dim: #2d1a0d;
-  --color-success: #3fb950;
-  --color-warning: #d29922;
-  --color-error: #f85149;
-  --color-running: #58a6ff;
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  /* Warm charcoal palette — Braun-inspired, not GitHub blue-black */
+  --color-bg: #141312;
+  --color-surface: #1c1b19;
+  --color-surface-raised: #242220;
+  --color-border: #302e2b;
+  --color-border-subtle: #201f1d;
+  --color-text: #e4ddd4;
+  --color-text-muted: #8a8278;
+  --color-text-faint: #4a4744;
+
+  /* Single accent: Braun orange. Used sparingly — only at decision points */
+  --color-accent: #e05c1a;
+  --color-accent-dim: #271608;
+
+  /* Functional status colors — muted, not competing with content */
+  --color-success: #5b9e6e;
+  --color-warning: #a87d20;
+  --color-error: #b84040;
+  --color-running: #5a8faa;
+
+  /* Helvetica Neue — the Braun typeface */
+  --font-sans: "Helvetica Neue", Helvetica, -apple-system, system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -28,28 +35,25 @@ html, body {
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: var(--color-border); }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-text-faint); }
 
-@keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Entrance — subtle, functional */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-.animate-in { animation: fadeSlideIn 0.2s ease-out both; }
+.animate-in { animation: fadeIn 0.15s ease-out both; }
 
+/* Running indicator — no animation. A steady mark, not a performance */
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-.spin { animation: spin 1s linear infinite; }
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-.pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
-
+.spin { animation: spin 1.2s linear infinite; }
 
