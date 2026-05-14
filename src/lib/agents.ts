@@ -1,5 +1,9 @@
 import { spawn, ChildProcess } from "child_process";
-import type { AgentRecord } from "@/types";
+import type { AgentRecord, AgentType } from "@/types";
+
+// node-pty is a native module — import conditionally to avoid SSR issues
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pty = require("node-pty");
 
 interface AgentEntry {
   record: AgentRecord;
@@ -7,10 +11,12 @@ interface AgentEntry {
   output: string[];
 }
 
-// Survive Next.js hot-reloads with a global singleton
+// Survive Next.js hot-reloads with global singletons
 declare global {
   // eslint-disable-next-line no-var
   var __tigerAgents: Map<string, AgentEntry> | undefined;
+  // eslint-disable-next-line no-var
+  var __tigerPtys: Map<string, unknown> | undefined;
 }
 
 function registry(): Map<string, AgentEntry> {
@@ -18,6 +24,13 @@ function registry(): Map<string, AgentEntry> {
     global.__tigerAgents = new Map();
   }
   return global.__tigerAgents;
+}
+
+function ptyRegistry(): Map<string, unknown> {
+  if (!global.__tigerPtys) {
+    global.__tigerPtys = new Map();
+  }
+  return global.__tigerPtys;
 }
 
 export function getAgents(projectId?: string): AgentRecord[] {
@@ -36,6 +49,7 @@ export function getAgentOutput(id: string): string[] {
 export function launchAgent(params: {
   id: string;
   projectId: string;
+  agentType: AgentType;
   label: string;
   task: string;
   command: string;
@@ -45,6 +59,7 @@ export function launchAgent(params: {
   const record: AgentRecord = {
     id: params.id,
     projectId: params.projectId,
+    agentType: params.agentType,
     label: params.label,
     task: params.task,
     command: params.command,
@@ -64,14 +79,52 @@ export function launchAgent(params: {
     if (entry.output.length > 10000) entry.output.shift();
   };
 
-  // Build command: split base command, append flags, then task if provided
+  if (params.agentType === "terminal") {
+    // Spawn a PTY bash session in the project directory
+    try {
+      const ptyProcess = pty.spawn("bash", [], {
+        name: "xterm-256color",
+        cols: 120,
+        rows: 40,
+        cwd: params.repoPath,
+        env: { ...process.env, TERM: "xterm-256color" },
+      });
+      record.pid = ptyProcess.pid;
+      ptyRegistry().set(params.id, ptyProcess);
+
+      ptyProcess.onData((data: string) => {
+        data.split("\n").forEach((line: string) => { if (line.trim()) addLine(line); });
+      });
+
+      ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
+        const e = registry().get(params.id);
+        if (!e) return;
+        e.record.status = exitCode === 0 ? "completed" : "killed";
+        e.record.completedAt = new Date().toISOString();
+        e.record.exitCode = exitCode;
+        ptyRegistry().delete(params.id);
+      });
+    } catch (err) {
+      record.status = "failed";
+      record.completedAt = new Date().toISOString();
+      addLine(`Failed to spawn PTY: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return record;
+  }
+
+  // ── Copilot / process agent ─────────────────────────────────────────────
+  const addOutput = (line: string) => {
+    entry.output.push(line);
+    if (entry.output.length > 10000) entry.output.shift();
+  };
+
   const parts = params.command.trim().split(/\s+/);
   const args = [...parts.slice(1), ...params.flags];
   if (params.task.trim()) args.push(params.task.trim());
 
-  addLine(`$ ${parts[0]} ${args.join(" ")}`);
-  addLine(`Working directory: ${params.repoPath}`);
-  addLine("─".repeat(60));
+  addOutput(`$ ${parts[0]} ${args.join(" ")}`);
+  addOutput(`Working directory: ${params.repoPath}`);
+  addOutput("─".repeat(60));
 
   try {
     const proc = spawn(parts[0], args, {
@@ -84,17 +137,11 @@ export function launchAgent(params: {
     record.pid = proc.pid ?? null;
 
     proc.stdout?.on("data", (data: Buffer) => {
-      data
-        .toString()
-        .split("\n")
-        .forEach((line) => { if (line) addLine(line); });
+      data.toString().split("\n").forEach((line) => { if (line) addOutput(line); });
     });
 
     proc.stderr?.on("data", (data: Buffer) => {
-      data
-        .toString()
-        .split("\n")
-        .forEach((line) => { if (line) addLine(line); });
+      data.toString().split("\n").forEach((line) => { if (line) addOutput(line); });
     });
 
     proc.on("close", (code: number | null) => {
@@ -103,12 +150,8 @@ export function launchAgent(params: {
       e.record.status = code === 0 ? "completed" : "failed";
       e.record.completedAt = new Date().toISOString();
       e.record.exitCode = code;
-      addLine("─".repeat(60));
-      addLine(
-        code === 0
-          ? "✓ Agent completed successfully"
-          : `✗ Agent exited with code ${code}`
-      );
+      addOutput("─".repeat(60));
+      addOutput(code === 0 ? "✓ Agent completed successfully" : `✗ Agent exited with code ${code}`);
     });
 
     proc.on("error", (err: Error) => {
@@ -116,7 +159,7 @@ export function launchAgent(params: {
       if (!e) return;
       e.record.status = "failed";
       e.record.completedAt = new Date().toISOString();
-      addLine(`Error: ${err.message}`);
+      addOutput(`Error: ${err.message}`);
     });
   } catch (err) {
     record.status = "failed";
@@ -130,7 +173,15 @@ export function launchAgent(params: {
 export function killAgent(id: string): boolean {
   const entry = registry().get(id);
   if (!entry || entry.record.status !== "running") return false;
-  entry.process?.kill("SIGTERM");
+
+  const ptyProc = ptyRegistry().get(id);
+  if (ptyProc) {
+    (ptyProc as { kill: () => void }).kill();
+    ptyRegistry().delete(id);
+  } else {
+    entry.process?.kill("SIGTERM");
+  }
+
   entry.record.status = "killed";
   entry.record.completedAt = new Date().toISOString();
   entry.output.push("─".repeat(60));
@@ -140,4 +191,5 @@ export function killAgent(id: string): boolean {
 
 export function removeAgent(id: string): void {
   registry().delete(id);
+  ptyRegistry().delete(id);
 }

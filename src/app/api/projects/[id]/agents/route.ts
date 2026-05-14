@@ -21,12 +21,13 @@ export async function POST(
 
   try {
     const body = await req.json();
-    const { label, task = "", command, flags } = body;
+    const { label, task = "", command, flags, agentType = "copilot" } = body;
     if (!label) return NextResponse.json({ error: "label is required" }, { status: 400 });
 
     const agent = launchAgent({
       id: randomUUID(),
       projectId: id,
+      agentType,
       label,
       task,
       command: command ?? project.defaultCommand,

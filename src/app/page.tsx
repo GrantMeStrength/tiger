@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { Project, AgentRecord, Settings } from "@/types";
+import type { Project, AgentRecord } from "@/types";
 import { ProjectCard } from "@/components/ProjectCard";
 import { AddProjectModal } from "@/components/AddProjectModal";
+import { SettingsPanel } from "@/components/SettingsPanel";
 
 interface AgentCounts {
   running: number; completed: number; failed: number; killed: number; total: number;
@@ -12,8 +13,11 @@ interface AgentCounts {
 export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
-  const [settings, setSettings] = useState<Settings | null>(null);
   const [showAddProject, setShowAddProject] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isFirstRun, setIsFirstRun] = useState(false);
+  const [defaultCommand, setDefaultCommand] = useState("gh copilot code");
+  const [defaultFlags, setDefaultFlags] = useState(["--yolo", "--resume"]);
   const [loading, setLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
@@ -24,7 +28,10 @@ export default function Dashboard() {
     const projs = await projRes.json();
     const s = await settingsRes.json();
     setProjects(projs);
-    setSettings(s);
+    setDefaultCommand(s.defaultCommand || "gh copilot code");
+    setDefaultFlags((s.defaultFlags || "--yolo --resume").split(/\s+/).filter(Boolean));
+    // Show first-run settings if no GitHub token or AI key configured
+    if (!s.defaultCommand) setIsFirstRun(true);
     setLoading(false);
 
     // Fetch agents for all projects
@@ -126,6 +133,21 @@ export default function Dashboard() {
             </span>
           )}
           <button
+            onClick={() => setShowSettings(true)}
+            title="Settings"
+            style={{
+              padding: "7px 12px",
+              background: "none",
+              border: "1px solid var(--color-border)",
+              borderRadius: "6px",
+              color: "var(--color-text-muted)",
+              fontSize: "16px",
+              cursor: "pointer",
+            }}
+          >
+            ⚙
+          </button>
+          <button
             onClick={() => setShowAddProject(true)}
             style={{
               padding: "7px 16px",
@@ -200,12 +222,19 @@ export default function Dashboard() {
         )}
       </main>
 
-      {showAddProject && settings && (
+      {showAddProject && (
         <AddProjectModal
-          defaultCommand={settings.defaultCommand}
-          defaultFlags={settings.defaultFlags}
+          defaultCommand={defaultCommand}
+          defaultFlags={defaultFlags}
           onAdd={handleAdd}
           onClose={() => setShowAddProject(false)}
+        />
+      )}
+
+      {(showSettings || isFirstRun) && (
+        <SettingsPanel
+          isFirstRun={isFirstRun}
+          onClose={() => { setShowSettings(false); setIsFirstRun(false); }}
         />
       )}
     </div>

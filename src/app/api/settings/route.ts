@@ -1,15 +1,29 @@
 import { NextResponse } from "next/server";
-import { getSettings, updateSettings } from "@/lib/data";
+import { loadSettings, saveSettings } from "@/lib/settings";
 
 export async function GET() {
-  return NextResponse.json(getSettings());
+  const settings = loadSettings();
+  // Mask secrets in the response — client shows them as placeholders
+  return NextResponse.json({
+    ...settings,
+    githubToken: settings.githubToken ? "••••••••" : "",
+    aiKey: settings.aiKey ? "••••••••" : "",
+  });
 }
 
-export async function PUT(req: Request) {
+export async function POST(req: Request) {
   try {
-    const updates = await req.json();
-    updateSettings(updates);
-    return NextResponse.json(getSettings());
+    const body = await req.json();
+    const current = loadSettings();
+    const updated = {
+      ...current,
+      ...body,
+      // Don't overwrite secrets if the client sent back the masked placeholder
+      githubToken: body.githubToken === "••••••••" ? current.githubToken : (body.githubToken ?? ""),
+      aiKey: body.aiKey === "••••••••" ? current.aiKey : (body.aiKey ?? ""),
+    };
+    saveSettings(updated);
+    return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
