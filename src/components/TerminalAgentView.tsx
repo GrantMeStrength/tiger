@@ -4,6 +4,8 @@ import "xterm/css/xterm.css";
 
 export default function TerminalAgentView({ agentId }: { agentId: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const terminalRef = useRef<any>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -52,6 +54,8 @@ export default function TerminalAgentView({ agentId }: { agentId: string }) {
       terminal.loadAddon(fitAddon);
       terminal.open(containerRef.current!);
       fitAddon.fit();
+      terminal.focus();
+      terminalRef.current = terminal;
 
       // Observe container resize
       const resizeObserver = new ResizeObserver(() => {
@@ -65,8 +69,8 @@ export default function TerminalAgentView({ agentId }: { agentId: string }) {
 
       ws.onopen = () => {
         terminal.write("\r\n\x1b[2;32m[Tiger] Terminal connected\x1b[0m\r\n\r\n");
-        // Send initial size
         ws!.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
+        terminal.focus();
       };
 
       ws.onmessage = (e) => {
@@ -110,11 +114,13 @@ export default function TerminalAgentView({ agentId }: { agentId: string }) {
   return (
     <div
       ref={containerRef}
+      onClick={() => terminalRef.current?.focus()}
       style={{
         width: "100%",
         height: "100%",
         padding: "8px",
         boxSizing: "border-box",
+        cursor: "text",
       }}
     />
   );
