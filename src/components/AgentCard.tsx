@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import type { AgentRecord } from "@/types";
 
 interface Props {
@@ -24,8 +25,7 @@ const STATUS_COLOR: Record<AgentRecord["status"], string> = {
   killed: "var(--color-text-faint)",
 };
 
-function elapsed(start: string, end: string | null): string {
-  const ms = (end ? new Date(end).getTime() : Date.now()) - new Date(start).getTime();
+function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
@@ -37,6 +37,17 @@ export function AgentCard({ agent, selected, onSelect, onKill, onRemove }: Props
   const color = STATUS_COLOR[agent.status];
   const icon = STATUS_ICON[agent.status];
   const isRunning = agent.status === "running";
+
+  // Live-updating elapsed timer for running agents
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!isRunning) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [isRunning]);
+
+  const elapsedMs = (agent.completedAt ? new Date(agent.completedAt).getTime() : now) - new Date(agent.startedAt).getTime();
+  const elapsedStr = formatElapsed(elapsedMs);
 
   return (
     <div
@@ -115,22 +126,28 @@ export function AgentCard({ agent, selected, onSelect, onKill, onRemove }: Props
               {agent.status}
             </span>
             <span style={{ fontSize: "10px", color: "var(--color-text-faint)" }}>
-              {elapsed(agent.startedAt, agent.completedAt)}
+              {elapsedStr}
             </span>
-            {agent.flags.length > 0 && (
-              <span
-                style={{
-                  fontSize: "10px",
-                  color: "var(--color-text-faint)",
-                  fontFamily: "var(--font-mono)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  maxWidth: "120px",
-                }}
-              >
-                {agent.flags.join(" ")}
+            {agent.agentType === "terminal" ? (
+              <span style={{ fontSize: "9px", color: "var(--color-text-faint)", letterSpacing: "0.03em" }}>
+                💻 terminal
               </span>
+            ) : (
+              agent.flags.length > 0 && (
+                <span
+                  style={{
+                    fontSize: "10px",
+                    color: "var(--color-text-faint)",
+                    fontFamily: "var(--font-mono)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    maxWidth: "120px",
+                  }}
+                >
+                  {agent.flags.join(" ")}
+                </span>
+              )
             )}
           </div>
         </div>
