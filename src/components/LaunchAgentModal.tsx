@@ -1,17 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import type { Project, AgentType } from "@/types";
+import type { Project, AgentRecord, AgentType } from "@/types";
 
 interface Props {
   project: Project;
+  agents: AgentRecord[];
   onLaunch: (params: { label: string; task: string; command: string; flags: string[]; agentType: AgentType }) => void;
   onClose: () => void;
 }
 
-export function LaunchAgentModal({ project, onLaunch, onClose }: Props) {
+export function LaunchAgentModal({ project, agents, onLaunch, onClose }: Props) {
   const [agentType, setAgentType] = useState<AgentType>("copilot");
-  const [label, setLabel] = useState("");
+
+  // Default labels: count existing agents of each type
+  const terminalCount = agents.filter((a) => a.agentType === "terminal").length;
+  const copilotCount = agents.filter((a) => a.agentType === "copilot").length;
+  const defaultLabels: Record<AgentType, string> = {
+    terminal: `Terminal ${terminalCount + 1}`,
+    copilot: `Agent ${copilotCount + 1}`,
+  };
+
+  const [label, setLabel] = useState(defaultLabels["copilot"]);
+  const [userEditedLabel, setUserEditedLabel] = useState(false);
   const [task, setTask] = useState("");
   const [command, setCommand] = useState(project.defaultCommand);
   const [flagsText, setFlagsText] = useState(project.defaultFlags.join(" "));
@@ -61,14 +72,20 @@ export function LaunchAgentModal({ project, onLaunch, onClose }: Props) {
         <div style={{ display: "flex", gap: "6px", marginBottom: "18px" }}>
           <TypeToggle
             active={isCopilot}
-            onClick={() => setAgentType("copilot")}
+            onClick={() => {
+              setAgentType("copilot");
+              if (!userEditedLabel) setLabel(defaultLabels["copilot"]);
+            }}
             icon="🤖"
             label="Copilot"
             hint="gh copilot code"
           />
           <TypeToggle
             active={!isCopilot}
-            onClick={() => setAgentType("terminal")}
+            onClick={() => {
+              setAgentType("terminal");
+              if (!userEditedLabel) setLabel(defaultLabels["terminal"]);
+            }}
             icon="💻"
             label="Terminal"
             hint="Interactive bash"
@@ -76,20 +93,19 @@ export function LaunchAgentModal({ project, onLaunch, onClose }: Props) {
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <Field label="Session label *" hint="A short name for this session">
+          <Field label="Session label" hint="Double-click to rename after launch">
             <input
               autoFocus
               value={label}
-              onChange={(e) => setLabel(e.target.value)}
+              onChange={(e) => { setLabel(e.target.value); setUserEditedLabel(true); }}
               placeholder={isCopilot ? "e.g. Refactor API client" : "e.g. Dev shell"}
               style={inputStyle}
-              required
             />
           </Field>
 
           {isCopilot && (
             <>
-              <Field label="Task / prompt" hint="Passed as an argument to the CLI (optional)">
+              <Field label="Task / prompt" hint="Sent to the CLI via stdin on start (optional)">
                 <textarea
                   value={task}
                   onChange={(e) => setTask(e.target.value)}
@@ -157,11 +173,11 @@ export function LaunchAgentModal({ project, onLaunch, onClose }: Props) {
             <button type="button" onClick={onClose} style={secondaryBtn}>Cancel</button>
             <button
               type="submit"
-              disabled={!label.trim() || launching}
+              disabled={launching}
               style={{
                 ...primaryBtn,
-                opacity: (!label.trim() || launching) ? 0.5 : 1,
-                cursor: (!label.trim() || launching) ? "not-allowed" : "pointer",
+                opacity: launching ? 0.5 : 1,
+                cursor: launching ? "not-allowed" : "pointer",
               }}
             >
               {launching ? "Launching…" : `Launch ${isCopilot ? "Copilot" : "Terminal"}`}

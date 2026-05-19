@@ -5,6 +5,7 @@ import type { Project, AgentRecord } from "@/types";
 import { ProjectCard } from "@/components/ProjectCard";
 import { AddProjectModal } from "@/components/AddProjectModal";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface AgentCounts {
   running: number; completed: number; failed: number; killed: number; total: number;
@@ -95,12 +96,12 @@ export default function Dashboard() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--color-bg)" }}>
-      {/* Header — clean, no decoration */}
+      {/* Header */}
       <header
         style={{
           borderBottom: "1px solid var(--color-border-subtle)",
-          padding: "0 40px",
-          height: "52px",
+          padding: "0 48px",
+          height: 56,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -110,111 +111,86 @@ export default function Dashboard() {
           zIndex: 10,
         }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", gap: "12px" }}>
-          <span style={{ fontSize: "14px", fontWeight: 500, letterSpacing: "-0.01em", color: "var(--color-text)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)", letterSpacing: "-0.02em" }}>
             Tiger
           </span>
           {totalRunning > 0 && (
-            <span style={{ fontSize: "11px", color: "var(--color-running)", fontWeight: 400 }}>
+            <span style={{
+              fontSize: 11, color: "var(--color-accent)", fontWeight: 500,
+              background: "var(--color-accent-dim)", padding: "2px 8px", borderRadius: 10,
+            }}>
               {totalRunning} running
             </span>
           )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <ThemeToggle />
           <button
+            type="button"
             onClick={() => setShowSettings(true)}
-            style={{
-              padding: "6px 12px",
-              background: "none",
-              border: "none",
-              color: "var(--color-text-faint)",
-              fontSize: "12px",
-              cursor: "pointer",
-              letterSpacing: "0.01em",
-            }}
+            style={{ padding: "5px 10px", background: "none", border: "none", color: "var(--color-text-faint)", fontSize: 12, cursor: "pointer" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-muted)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-faint)"; }}
           >
             Settings
           </button>
           <button
+            type="button"
             onClick={() => setShowAddProject(true)}
             style={{
               padding: "6px 14px",
-              background: "none",
-              border: "1px solid var(--color-border)",
-              color: "var(--color-text-muted)",
-              fontSize: "12px",
+              background: "var(--color-accent)",
+              border: "none",
+              color: "#fff",
+              fontSize: 12,
               fontWeight: 500,
               cursor: "pointer",
+              borderRadius: 5,
               letterSpacing: "0.01em",
             }}
-            onMouseEnter={(e) => {
-              const b = e.currentTarget as HTMLButtonElement;
-              b.style.borderColor = "var(--color-accent)";
-              b.style.color = "var(--color-accent)";
-            }}
-            onMouseLeave={(e) => {
-              const b = e.currentTarget as HTMLButtonElement;
-              b.style.borderColor = "var(--color-border)";
-              b.style.color = "var(--color-text-muted)";
-            }}
           >
-            New Project
+            New project
           </button>
         </div>
       </header>
 
       {/* Main content */}
-      <main style={{ padding: "48px 40px", maxWidth: "1200px", margin: "0 auto" }}>
+      <main style={{ padding: "48px", maxWidth: 1200, margin: "0 auto", width: "100%" }}>
         {loading ? (
-          <div style={{ color: "var(--color-text-faint)", fontSize: "12px", padding: "80px 0", textAlign: "center" }}>
-            —
-          </div>
+          <div style={{ color: "var(--color-text-faint)", fontSize: 12, padding: "80px 0", textAlign: "center" }}>—</div>
         ) : projects.length === 0 ? (
           <div style={{ padding: "120px 0", textAlign: "center" }}>
-            <div style={{ fontSize: "12px", fontWeight: 500, color: "var(--color-text-muted)", marginBottom: "8px", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-muted)", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>
               No projects
             </div>
-            <div style={{ fontSize: "12px", color: "var(--color-text-faint)", marginBottom: "32px", lineHeight: 1.8 }}>
+            <div style={{ fontSize: 13, color: "var(--color-text-faint)", marginBottom: 32, lineHeight: 1.8 }}>
               Add a project to begin managing agent sessions
             </div>
             <button
               onClick={() => setShowAddProject(true)}
-              style={{
-                padding: "9px 20px",
-                background: "var(--color-accent)",
-                border: "none",
-                color: "white",
-                fontSize: "12px",
-                fontWeight: 500,
-                cursor: "pointer",
-                letterSpacing: "0.02em",
-              }}
+              style={{ padding: "9px 20px", background: "var(--color-accent)", border: "none", color: "white", fontSize: 13, fontWeight: 500, cursor: "pointer", borderRadius: 6 }}
             >
               Add project
             </button>
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-              gap: "1px",
-              background: "var(--color-border-subtle)",
-              border: "1px solid var(--color-border-subtle)",
-            }}
-          >
-            {projects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                agentCounts={countsByProject(project.id)}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
+          <>
+            <div style={{ fontSize: 11, color: "var(--color-text-faint)", marginBottom: 24, letterSpacing: "0.02em" }}>
+              {projects.length} {projects.length === 1 ? "project" : "projects"}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+              {projects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  agentCounts={countsByProject(project.id)}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          </>
         )}
       </main>
 

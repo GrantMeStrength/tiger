@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useTheme } from "@/lib/theme";
+import type { Theme } from "@/lib/theme";
 
 interface Settings {
   githubToken: string;
@@ -30,11 +32,11 @@ interface FieldProps {
 function Field({ label, hint, value, onChange, type = "text", placeholder, mono }: FieldProps) {
   return (
     <div style={{ marginBottom: 18 }}>
-      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#c9d1d9", marginBottom: 5 }}>
+      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text)", marginBottom: 5 }}>
         {label}
       </label>
       {hint && (
-        <p style={{ fontSize: 11, color: "#484f58", margin: "0 0 5px", lineHeight: 1.5 }}>{hint}</p>
+        <p style={{ fontSize: 11, color: "var(--color-text-faint)", margin: "0 0 5px", lineHeight: 1.5 }}>{hint}</p>
       )}
       <input
         type={type}
@@ -43,14 +45,14 @@ function Field({ label, hint, value, onChange, type = "text", placeholder, mono 
         placeholder={placeholder}
         style={{
           width: "100%", boxSizing: "border-box",
-          background: "#161b22", border: "1px solid #30363d",
-          borderRadius: 6, color: "#c9d1d9", fontSize: 13,
+          background: "var(--color-surface)", border: "1px solid var(--color-border)",
+          borderRadius: 6, color: "var(--color-text)", fontSize: 13,
           padding: "7px 10px", outline: "none",
           fontFamily: mono ? "var(--font-mono)" : "inherit",
           transition: "border-color 0.15s",
         }}
-        onFocus={(e) => { e.target.style.borderColor = "#f97316"; }}
-        onBlur={(e) => { e.target.style.borderColor = "#30363d"; }}
+        onFocus={(e) => { e.target.style.borderColor = "var(--color-accent)"; }}
+        onBlur={(e) => { e.target.style.borderColor = "var(--color-border)"; }}
       />
     </div>
   );
@@ -60,9 +62,9 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-      textTransform: "uppercase", color: "#484f58",
+      textTransform: "uppercase", color: "var(--color-text-faint)",
       margin: "20px 0 12px", paddingBottom: 6,
-      borderBottom: "1px solid #21262d",
+      borderBottom: "1px solid var(--color-surface-raised)",
     }}>
       {children}
     </div>
@@ -79,6 +81,7 @@ export function SettingsPanel({ isFirstRun = false, onClose }: SettingsPanelProp
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     fetch("/api/settings")
@@ -123,18 +126,18 @@ export function SettingsPanel({ isFirstRun = false, onClose }: SettingsPanelProp
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
       <div style={{
-        background: "#0d1117", border: "1px solid #30363d",
+        background: "var(--color-bg)", border: "1px solid var(--color-border)",
         borderRadius: 14, width: 520, maxHeight: "85vh",
         display: "flex", flexDirection: "column",
         boxShadow: "0 24px 60px rgba(0,0,0,0.4)",
       }}>
         {/* Header */}
-        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #21262d", flexShrink: 0 }}>
-          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#c9d1d9" }}>
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid var(--color-surface-raised)", flexShrink: 0 }}>
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--color-text)" }}>
             {isFirstRun ? "Welcome to Tiger 🐯" : "⚙ Settings"}
           </h2>
           {isFirstRun && (
-            <p style={{ margin: "6px 0 0", fontSize: 12, color: "#8b949e", lineHeight: 1.5 }}>
+            <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--color-text-muted)", lineHeight: 1.5 }}>
               Configure your credentials and defaults. Everything is stored locally in{" "}
               <code style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>~/.tiger/settings.json</code>.
             </p>
@@ -143,6 +146,30 @@ export function SettingsPanel({ isFirstRun = false, onClose }: SettingsPanelProp
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "4px 24px 16px" }}>
+
+          <SectionHeader>Appearance</SectionHeader>
+          <div style={{ marginBottom: 18 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text)", marginBottom: 8 }}>
+              Theme
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              {(["dark", "light"] as Theme[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTheme(t)}
+                  style={{
+                    background: theme === t ? "var(--color-accent)" : "var(--color-surface)",
+                    border: `1px solid ${theme === t ? "var(--color-accent)" : "var(--color-border)"}`,
+                    borderRadius: 7, color: theme === t ? "#fff" : "var(--color-text-muted)",
+                    cursor: "pointer", fontSize: 13, fontWeight: 600,
+                    padding: "6px 18px", transition: "all 0.15s", textTransform: "capitalize",
+                  }}
+                >
+                  {t === "dark" ? "🌑 Dark" : "☀️ Light"}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <SectionHeader>GitHub</SectionHeader>
           <Field
@@ -192,22 +219,22 @@ export function SettingsPanel({ isFirstRun = false, onClose }: SettingsPanelProp
         </div>
 
         {error && (
-          <div style={{ padding: "0 24px 8px", color: "#f85149", fontSize: 12 }}>{error}</div>
+          <div style={{ padding: "0 24px 8px", color: "var(--color-error)", fontSize: 12 }}>{error}</div>
         )}
 
         {/* Footer */}
         <div style={{
-          padding: "14px 24px 20px", borderTop: "1px solid #21262d", flexShrink: 0,
+          padding: "14px 24px 20px", borderTop: "1px solid var(--color-surface-raised)", flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
-          <span style={{ fontSize: 11, color: "#484f58" }}>
+          <span style={{ fontSize: 11, color: "var(--color-text-faint)" }}>
             Stored in ~/.tiger/settings.json
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             {!isFirstRun && (
               <button onClick={onClose} style={{
-                background: "none", border: "1px solid #30363d", borderRadius: 7,
-                color: "#8b949e", cursor: "pointer", fontSize: 13, padding: "7px 16px",
+                background: "none", border: "1px solid var(--color-border)", borderRadius: 7,
+                color: "var(--color-text-muted)", cursor: "pointer", fontSize: 13, padding: "7px 16px",
               }}>
                 Cancel
               </button>
@@ -216,7 +243,7 @@ export function SettingsPanel({ isFirstRun = false, onClose }: SettingsPanelProp
               onClick={handleSave}
               disabled={saving || saved}
               style={{
-                background: saved ? "#3fb950" : "#f97316",
+                background: saved ? "var(--color-success)" : "var(--color-accent)",
                 border: "none", borderRadius: 7, color: "#fff",
                 cursor: saving || saved ? "default" : "pointer",
                 fontSize: 13, fontWeight: 600, padding: "7px 20px",

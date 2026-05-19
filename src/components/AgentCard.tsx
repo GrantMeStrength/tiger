@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { AgentRecord } from "@/types";
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   onSelect: () => void;
   onKill: (id: string) => void;
   onRemove: (id: string) => void;
+  onRename: (id: string, label: string) => void;
 }
 
 const STATUS_ICON: Record<AgentRecord["status"], string> = {
@@ -25,16 +26,34 @@ const STATUS_COLOR: Record<AgentRecord["status"], string> = {
   killed: "var(--color-text-faint)",
 };
 
-export function AgentCard({ agent, selected, onSelect, onKill, onRemove }: Props) {
+export function AgentCard({ agent, selected, onSelect, onKill, onRemove, onRename }: Props) {
   const color = STATUS_COLOR[agent.status];
   const isRunning = agent.status === "running";
 
   const [now, setNow] = useState(Date.now());
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(agent.label);
+  const inputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (!isRunning) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [isRunning]);
+
+  // Sync edit value if label changes externally
+  useEffect(() => { setEditValue(agent.label); }, [agent.label]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  const commitRename = () => {
+    const trimmed = editValue.trim();
+    setEditing(false);
+    if (trimmed && trimmed !== agent.label) onRename(agent.id, trimmed);
+    else setEditValue(agent.label);
+  };
 
   const elapsedMs = (agent.completedAt ? new Date(agent.completedAt).getTime() : now) - new Date(agent.startedAt).getTime();
   const elapsedStr = formatElapsed(elapsedMs);
@@ -58,10 +77,41 @@ export function AgentCard({ agent, selected, onSelect, onKill, onRemove }: Props
     >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Label */}
-          <div style={{ fontSize: "12px", fontWeight: 500, color: "var(--color-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: "3px" }}>
-            {agent.label}
-          </div>
+          {/* Label — double-click to rename */}
+          {editing ? (
+            <input
+              ref={inputRef}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+                if (e.key === "Escape") { setEditing(false); setEditValue(agent.label); }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                fontSize: "12px",
+                fontWeight: 500,
+                color: "var(--color-text)",
+                background: "var(--color-bg)",
+                border: "1px solid var(--color-accent)",
+                borderRadius: "3px",
+                padding: "1px 4px",
+                width: "100%",
+                outline: "none",
+                marginBottom: "3px",
+                fontFamily: "var(--font-sans)",
+              }}
+            />
+          ) : (
+            <div
+              onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); }}
+              title="Double-click to rename"
+              style={{ fontSize: "12px", fontWeight: 500, color: "var(--color-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: "3px", cursor: "pointer" }}
+            >
+              {agent.label}
+            </div>
+          )}
 
           {/* Task preview */}
           {agent.task && (

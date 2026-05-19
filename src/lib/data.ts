@@ -6,6 +6,8 @@ import type { AppData, Project, PlannerTask, Settings } from "@/types";
 const DATA_DIR = path.join(os.homedir(), ".tiger");
 const DATA_FILE = path.join(DATA_DIR, "data.json");
 const PLANS_DIR = path.join(DATA_DIR, "plans");
+const MEMORY_DIR = path.join(DATA_DIR, "memory");
+const CONTEXT_DIR = path.join(DATA_DIR, "context");
 
 const DEFAULT_DATA: AppData = {
   settings: {
@@ -16,11 +18,8 @@ const DEFAULT_DATA: AppData = {
 };
 
 function ensureDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(PLANS_DIR)) {
-    fs.mkdirSync(PLANS_DIR, { recursive: true });
+  for (const dir of [DATA_DIR, PLANS_DIR, MEMORY_DIR, CONTEXT_DIR]) {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   }
 }
 
@@ -117,4 +116,66 @@ export function updateTask(projectId: string, taskId: string, updates: Partial<P
 export function deleteTask(projectId: string, taskId: string): void {
   const tasks = getTasks(projectId).filter((t) => t.id !== taskId);
   saveTasks(projectId, tasks);
+}
+
+// ── Memory ────────────────────────────────────────────────────────────────────
+
+function memoryFile(projectId: string): string {
+  ensureDir();
+  const file = path.resolve(MEMORY_DIR, `${projectId}.md`);
+  if (!file.startsWith(path.resolve(MEMORY_DIR) + path.sep)) {
+    throw new Error("Invalid project id");
+  }
+  return file;
+}
+
+export function getMemory(projectId: string): string {
+  const file = memoryFile(projectId);
+  try {
+    return fs.readFileSync(file, "utf-8");
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return "";
+    throw err;
+  }
+}
+
+export function saveMemory(projectId: string, content: string): void {
+  fs.writeFileSync(memoryFile(projectId), content, "utf-8");
+}
+
+// ── Context / Brief ───────────────────────────────────────────────────────────
+
+export const DEFAULT_CONTEXT_SECTIONS = [
+  { key: "goal", title: "Goal / Purpose" },
+  { key: "architecture", title: "Architecture & Structure" },
+  { key: "conventions", title: "Code Conventions" },
+  { key: "constraints", title: "Constraints & Gotchas" },
+];
+
+function contextFile(projectId: string): string {
+  ensureDir();
+  const file = path.resolve(CONTEXT_DIR, `${projectId}.json`);
+  if (!file.startsWith(path.resolve(CONTEXT_DIR) + path.sep)) {
+    throw new Error("Invalid project id");
+  }
+  return file;
+}
+
+export function getContext(projectId: string): import("@/types").ContextBrief {
+  const file = contextFile(projectId);
+  try {
+    const raw = fs.readFileSync(file, "utf-8");
+    return JSON.parse(raw) as import("@/types").ContextBrief;
+  } catch {
+    return {
+      sections: DEFAULT_CONTEXT_SECTIONS.map((s) => ({ ...s, content: "" })),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+}
+
+export function saveContext(projectId: string, sections: import("@/types").ContextSection[]): import("@/types").ContextBrief {
+  const brief: import("@/types").ContextBrief = { sections, updatedAt: new Date().toISOString() };
+  fs.writeFileSync(contextFile(projectId), JSON.stringify(brief, null, 2), "utf-8");
+  return brief;
 }

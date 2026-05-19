@@ -8,7 +8,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Apply stored theme before first paint to prevent flash */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('tiger-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;})();` }} />
+      </head>
       <body>{children}</body>
     </html>
   );

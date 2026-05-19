@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import type { McpServer } from "@/types";
 
 export interface TigerSettings {
   githubToken: string;
@@ -8,6 +9,7 @@ export interface TigerSettings {
   aiBaseUrl: string;
   defaultCommand: string;
   defaultFlags: string;  // space-separated string for easy editing
+  mcpServers: McpServer[];
 }
 
 export const SETTINGS_DEFAULTS: TigerSettings = {
@@ -16,6 +18,7 @@ export const SETTINGS_DEFAULTS: TigerSettings = {
   aiBaseUrl: "https://models.inference.ai.azure.com",
   defaultCommand: "gh copilot code",
   defaultFlags: "--yolo --resume",
+  mcpServers: [],
 };
 
 export const SETTINGS_KEYS = Object.keys(SETTINGS_DEFAULTS) as (keyof TigerSettings)[];
@@ -26,15 +29,33 @@ let _cache: TigerSettings | null = null;
 let _cacheTime = 0;
 const CACHE_TTL = 2000;
 
+function sanitizeMcpServers(raw: unknown): McpServer[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(Boolean).map((s) => {
+    const obj = s && typeof s === "object" ? (s as Record<string, unknown>) : {};
+    return {
+      name: String(obj.name ?? ""),
+      command: String(obj.command ?? ""),
+      args: Array.isArray(obj.args) ? obj.args.map(String) : [],
+      env: obj.env && typeof obj.env === "object" && !Array.isArray(obj.env)
+        ? Object.fromEntries(Object.entries(obj.env as Record<string, unknown>).map(([k, v]) => [k, String(v)]))
+        : {},
+    };
+  }).filter((s) => s.name && s.command);
+}
+
 function sanitize(raw: unknown): TigerSettings {
   const obj = raw && typeof raw === "object" && !Array.isArray(raw)
     ? (raw as Record<string, unknown>)
     : {};
-  const result: Partial<TigerSettings> = {};
-  for (const key of SETTINGS_KEYS) {
-    result[key] = String(obj[key] ?? SETTINGS_DEFAULTS[key]);
-  }
-  return result as TigerSettings;
+  return {
+    githubToken: String(obj.githubToken ?? SETTINGS_DEFAULTS.githubToken),
+    aiKey: String(obj.aiKey ?? SETTINGS_DEFAULTS.aiKey),
+    aiBaseUrl: String(obj.aiBaseUrl ?? SETTINGS_DEFAULTS.aiBaseUrl),
+    defaultCommand: String(obj.defaultCommand ?? SETTINGS_DEFAULTS.defaultCommand),
+    defaultFlags: String(obj.defaultFlags ?? SETTINGS_DEFAULTS.defaultFlags),
+    mcpServers: sanitizeMcpServers(obj.mcpServers),
+  };
 }
 
 export function loadSettings(): TigerSettings {

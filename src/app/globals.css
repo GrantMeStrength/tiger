@@ -1,28 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  /* Warm charcoal palette — Braun-inspired, not GitHub blue-black */
-  --color-bg: #141312;
-  --color-surface: #1c1b19;
-  --color-surface-raised: #242220;
-  --color-border: #302e2b;
-  --color-border-subtle: #201f1d;
-  --color-text: #e4ddd4;
-  --color-text-muted: #8a8278;
-  --color-text-faint: #4a4744;
+  /* Zinc/neutral palette — crisp, modern, no warmth */
+  --color-bg: #09090b;
+  --color-surface: #18181b;
+  --color-surface-raised: #27272a;
+  --color-border: #3f3f46;
+  --color-border-subtle: #27272a;
+  --color-text: #fafafa;
+  --color-text-muted: #a1a1aa;
+  --color-text-faint: #52525b;
 
-  /* Single accent: Braun orange. Used sparingly — only at decision points */
-  --color-accent: #e05c1a;
-  --color-accent-dim: #271608;
+  /* Electric blue — the single accent colour, used only for key state */
+  --color-accent: #3b82f6;
+  --color-accent-dim: #1e3460;
 
-  /* Functional status colors — muted, not competing with content */
-  --color-success: #5b9e6e;
-  --color-warning: #a87d20;
-  --color-error: #b84040;
-  --color-running: #5a8faa;
+  /* Semantic status colours */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-running: #3b82f6;
 
-  /* Helvetica Neue — the Braun typeface */
-  --font-sans: "Helvetica Neue", Helvetica, -apple-system, system-ui, sans-serif;
+  /* System font first — SF Pro on macOS, Segoe on Windows */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, system-ui, sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 }
 
@@ -57,3 +57,74 @@ html, body {
 }
 .spin { animation: spin 1.2s linear infinite; }
 
+
+/* Hide native browser cursor inside xterm.js — it has its own cursor */
+.xterm textarea,
+.xterm .xterm-helper-textarea {
+  caret-color: transparent !important;
+}
+
+/* ── CRT / Retro Terminal ──────────────────────────────────────────────────── */
+
+/* Phosphor bloom: boost brightness/contrast so the foreground colour
+   punches out of the near-black background like a real phosphor tube */
+.crt-screen {
+  filter: brightness(1.1) contrast(1.3) saturate(1.1);
+}
+
+.crt-green {
+  box-shadow: 0 0 32px rgba(30, 255, 30, 0.18), inset 0 0 80px rgba(0, 0, 0, 0.6);
+}
+
+.crt-amber {
+  box-shadow: 0 0 32px rgba(255, 176, 0, 0.2), inset 0 0 80px rgba(0, 0, 0, 0.5);
+}
+
+/* Raster scanlines — one dark band every 3px */
+.crt-scanlines {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.22) 2px,
+    rgba(0, 0, 0, 0.22) 3px
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Vignette — darker at corners, like the edge of a CRT tube */
+.crt-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.72) 100%);
+  pointer-events: none;
+  z-index: 11;
+}
+
+/* Rare subtle flicker — kept as keyframe in case it's wanted later */
+@keyframes crt-flicker {
+  0%, 88%, 90%, 92%, 100% { opacity: 1; }
+  89% { opacity: 0.97; }
+  91% { opacity: 0.95; }
+}
+
+/* Light theme — zinc whites, same blue accent */
+[data-theme="light"] {
+  --color-bg: #ffffff;
+  --color-surface: #fafafa;
+  --color-surface-raised: #f4f4f5;
+  --color-border: #e4e4e7;
+  --color-border-subtle: #f4f4f5;
+  --color-text: #09090b;
+  --color-text-muted: #71717a;
+  --color-text-faint: #a1a1aa;
+  --color-accent: #2563eb;
+  --color-accent-dim: #eff6ff;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-running: #2563eb;
+}

@@ -1,10 +1,6 @@
 import { spawn, ChildProcess } from "child_process";
 import type { AgentRecord, AgentType } from "@/types";
 
-// node-pty is a native module — import conditionally to avoid SSR issues
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pty = require("node-pty");
-
 interface AgentEntry {
   record: AgentRecord;
   process: ChildProcess | null;
@@ -15,8 +11,6 @@ interface AgentEntry {
 declare global {
   // eslint-disable-next-line no-var
   var __tigerAgents: Map<string, AgentEntry> | undefined;
-  // eslint-disable-next-line no-var
-  var __tigerPtys: Map<string, unknown> | undefined;
 }
 
 function registry(): Map<string, AgentEntry> {
@@ -24,13 +18,6 @@ function registry(): Map<string, AgentEntry> {
     global.__tigerAgents = new Map();
   }
   return global.__tigerAgents;
-}
-
-function ptyRegistry(): Map<string, unknown> {
-  if (!global.__tigerPtys) {
-    global.__tigerPtys = new Map();
-  }
-  return global.__tigerPtys;
 }
 
 export function getAgents(projectId?: string): AgentRecord[] {
@@ -44,6 +31,39 @@ export function getAgent(id: string): AgentRecord | undefined {
 
 export function getAgentOutput(id: string): string[] {
   return registry().get(id)?.output ?? [];
+}
+
+// Register a terminal agent record — PTY is spawned by server.js via /_tiger/spawn-pty
+export function registerTerminalAgent(params: {
+  id: string;
+  projectId: string;
+  label: string;
+  task: string;
+  command: string;
+  flags: string[];
+  repoPath: string;
+  pid: number | null;
+  status: "running" | "failed";
+  errorMessage?: string;
+}): AgentRecord {
+  const record: AgentRecord = {
+    id: params.id,
+    projectId: params.projectId,
+    agentType: "terminal",
+    label: params.label,
+    task: params.task,
+    command: params.command,
+    flags: params.flags,
+    status: params.status,
+    pid: params.pid,
+    startedAt: new Date().toISOString(),
+    completedAt: params.status === "failed" ? new Date().toISOString() : null,
+    exitCode: null,
+  };
+  const output: string[] = [];
+  if (params.errorMessage) output.push(`Error: ${params.errorMessage}`);
+  registry().set(params.id, { record, process: null, output });
+  return record;
 }
 
 export function launchAgent(params: {
@@ -74,45 +94,6 @@ export function launchAgent(params: {
   const entry: AgentEntry = { record, process: null, output: [] };
   registry().set(params.id, entry);
 
-  const addLine = (line: string) => {
-    entry.output.push(line);
-    if (entry.output.length > 10000) entry.output.shift();
-  };
-
-  if (params.agentType === "terminal") {
-    // Spawn a PTY bash session in the project directory
-    try {
-      const ptyProcess = pty.spawn("bash", [], {
-        name: "xterm-256color",
-        cols: 120,
-        rows: 40,
-        cwd: params.repoPath,
-        env: { ...process.env, TERM: "xterm-256color" },
-      });
-      record.pid = ptyProcess.pid;
-      ptyRegistry().set(params.id, ptyProcess);
-
-      ptyProcess.onData((data: string) => {
-        data.split("\n").forEach((line: string) => { if (line.trim()) addLine(line); });
-      });
-
-      ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
-        const e = registry().get(params.id);
-        if (!e) return;
-        e.record.status = exitCode === 0 ? "completed" : "killed";
-        e.record.completedAt = new Date().toISOString();
-        e.record.exitCode = exitCode;
-        ptyRegistry().delete(params.id);
-      });
-    } catch (err) {
-      record.status = "failed";
-      record.completedAt = new Date().toISOString();
-      addLine(`Failed to spawn PTY: ${err instanceof Error ? err.message : String(err)}`);
-    }
-    return record;
-  }
-
-  // ── Copilot / process agent ─────────────────────────────────────────────
   const addOutput = (line: string) => {
     entry.output.push(line);
     if (entry.output.length > 10000) entry.output.shift();
@@ -120,7 +101,6 @@ export function launchAgent(params: {
 
   const parts = params.command.trim().split(/\s+/);
   const args = [...parts.slice(1), ...params.flags];
-  if (params.task.trim()) args.push(params.task.trim());
 
   addOutput(`$ ${parts[0]} ${args.join(" ")}`);
   addOutput(`Working directory: ${params.repoPath}`);
@@ -130,11 +110,17 @@ export function launchAgent(params: {
     const proc = spawn(parts[0], args, {
       cwd: params.repoPath,
       env: { ...process.env },
-      shell: false,
+      shell: true,
+      stdio: ["pipe", "pipe", "pipe"],
     });
 
     entry.process = proc;
     record.pid = proc.pid ?? null;
+
+    // Send task as stdin input (interactive CLIs like copilot read from stdin)
+    if (params.task.trim()) {
+      proc.stdin?.write(params.task.trim() + "\n");
+    }
 
     proc.stdout?.on("data", (data: Buffer) => {
       data.toString().split("\n").forEach((line) => { if (line) addOutput(line); });
@@ -164,7 +150,7 @@ export function launchAgent(params: {
   } catch (err) {
     record.status = "failed";
     record.completedAt = new Date().toISOString();
-    addLine(`Failed to spawn: ${err instanceof Error ? err.message : String(err)}`);
+    addOutput(`Failed to spawn: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return record;
@@ -174,11 +160,9 @@ export function killAgent(id: string): boolean {
   const entry = registry().get(id);
   if (!entry || entry.record.status !== "running") return false;
 
-  const ptyProc = ptyRegistry().get(id);
-  if (ptyProc) {
-    (ptyProc as { kill: () => void }).kill();
-    ptyRegistry().delete(id);
-  } else {
+  // Terminal PTY kill is handled by the API route calling /_tiger/kill-pty
+  // For process agents, kill directly
+  if (entry.record.agentType !== "terminal") {
     entry.process?.kill("SIGTERM");
   }
 
@@ -191,5 +175,11 @@ export function killAgent(id: string): boolean {
 
 export function removeAgent(id: string): void {
   registry().delete(id);
-  ptyRegistry().delete(id);
+}
+
+export function renameAgent(id: string, label: string): AgentRecord | undefined {
+  const entry = registry().get(id);
+  if (!entry) return undefined;
+  entry.record.label = label;
+  return entry.record;
 }

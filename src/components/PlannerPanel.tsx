@@ -3,10 +3,10 @@ import { useState, useEffect, useCallback } from "react";
 import type { PlannerTask, TaskStatus } from "@/types";
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
-  todo: "#8b949e",
-  "in-progress": "#58a6ff",
-  done: "#3fb950",
-  blocked: "#f85149",
+  todo: "var(--color-text-muted)",
+  "in-progress": "var(--color-running)",
+  done: "var(--color-success)",
+  blocked: "var(--color-error)",
 };
 
 const STATUS_ICONS: Record<TaskStatus, string> = {
@@ -34,7 +34,11 @@ export default function PlannerPanel({ projectId }: { projectId: string }) {
     if (res.ok) setTasks(await res.json());
   }, [projectId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 2000);
+    return () => clearInterval(interval);
+  }, [load]);
 
   async function addTask() {
     if (!newTitle.trim()) return;
@@ -95,7 +99,7 @@ export default function PlannerPanel({ projectId }: { projectId: string }) {
     const notes = editingNotes[task.id] ?? task.notes;
     return (
       <div key={task.id} style={{
-        background: "#161b22", border: "1px solid #21262d",
+        background: "var(--color-surface)", border: "1px solid var(--color-surface-raised)",
         borderRadius: 6, marginBottom: 6, overflow: "hidden",
       }}>
         <div style={{ display: "flex", alignItems: "center", padding: "8px 10px", gap: 8 }}>
@@ -111,28 +115,28 @@ export default function PlannerPanel({ projectId }: { projectId: string }) {
             {STATUS_ICONS[task.status]}
           </button>
           <span style={{
-            flex: 1, fontSize: 13, color: task.status === "done" ? "#484f58" : "#c9d1d9",
+            flex: 1, fontSize: 13, color: task.status === "done" ? "var(--color-text-faint)" : "var(--color-text)",
             textDecoration: task.status === "done" ? "line-through" : "none",
             cursor: "pointer",
           }} onClick={() => setExpandedId(isExpanded ? null : task.id)}>
             {task.title}
           </span>
-          <span style={{ fontSize: 10, color: "#484f58", marginRight: 4 }}>
+          <span style={{ fontSize: 10, color: "var(--color-text-faint)", marginRight: 4 }}>
             {"▲".repeat(task.priority === 1 ? 3 : task.priority === 2 ? 2 : 1)}
           </span>
           <button onClick={() => deleteTask(task.id)} title="Delete" style={{
             background: "none", border: "none", cursor: "pointer",
-            color: "#484f58", fontSize: 14, padding: 0,
+            color: "var(--color-text-faint)", fontSize: 14, padding: 0,
           }}>✕</button>
         </div>
 
         {isExpanded && (
-          <div style={{ padding: "0 10px 10px", borderTop: "1px solid #21262d" }}>
+          <div style={{ padding: "0 10px 10px", borderTop: "1px solid var(--color-surface-raised)" }}>
             <div style={{ display: "flex", gap: 6, margin: "8px 0 6px" }}>
               {([1, 2, 3] as const).map((p) => (
                 <button key={p} onClick={() => setPriority(task, p)} style={{
-                  background: task.priority === p ? "#f97316" : "#21262d",
-                  border: "none", borderRadius: 3, color: task.priority === p ? "#fff" : "#8b949e",
+                  background: task.priority === p ? "var(--color-accent)" : "var(--color-surface-raised)",
+                  border: "none", borderRadius: 3, color: task.priority === p ? "#fff" : "var(--color-text-muted)",
                   fontSize: 10, padding: "2px 8px", cursor: "pointer",
                 }}>
                   {p === 1 ? "High" : p === 2 ? "Medium" : "Low"}
@@ -146,8 +150,8 @@ export default function PlannerPanel({ projectId }: { projectId: string }) {
               placeholder="Add notes..."
               rows={3}
               style={{
-                width: "100%", background: "#0d1117", border: "1px solid #30363d",
-                borderRadius: 4, color: "#c9d1d9", fontSize: 12, fontFamily: "inherit",
+                width: "100%", background: "var(--color-bg)", border: "1px solid var(--color-border)",
+                borderRadius: 4, color: "var(--color-text)", fontSize: 12, fontFamily: "inherit",
                 padding: "6px 8px", resize: "vertical", boxSizing: "border-box",
               }}
             />
@@ -167,12 +171,12 @@ export default function PlannerPanel({ projectId }: { projectId: string }) {
             onKeyDown={(e) => e.key === "Enter" && addTask()}
             placeholder="New task... (Enter to add)"
             style={{
-              flex: 1, background: "#161b22", border: "1px solid #30363d",
-              borderRadius: 6, color: "#c9d1d9", padding: "8px 10px", fontSize: 13,
+              flex: 1, background: "var(--color-surface)", border: "1px solid var(--color-border)",
+              borderRadius: 6, color: "var(--color-text)", padding: "8px 10px", fontSize: 13,
             }}
           />
           <button onClick={addTask} style={{
-            background: "#f97316", border: "none", borderRadius: 6,
+            background: "var(--color-accent)", border: "none", borderRadius: 6,
             color: "#fff", padding: "8px 14px", cursor: "pointer", fontWeight: 600,
           }}>+</button>
         </div>
@@ -188,7 +192,7 @@ export default function PlannerPanel({ projectId }: { projectId: string }) {
               color: STATUS_COLORS[status], textTransform: "uppercase",
               marginBottom: 6, display: "flex", alignItems: "center", gap: 6,
             }}>
-              {STATUS_ICONS[status]} {status} <span style={{ color: "#484f58" }}>({group.length})</span>
+              {STATUS_ICONS[status]} {status} <span style={{ color: "var(--color-text-faint)" }}>({group.length})</span>
             </div>
             {group.map(renderTask)}
           </div>
@@ -196,7 +200,7 @@ export default function PlannerPanel({ projectId }: { projectId: string }) {
       })}
 
       {tasks.length === 0 && (
-        <div style={{ color: "#484f58", fontSize: 13, textAlign: "center", marginTop: 40 }}>
+        <div style={{ color: "var(--color-text-faint)", fontSize: 13, textAlign: "center", marginTop: 40 }}>
           No tasks yet. Add one above.
         </div>
       )}
