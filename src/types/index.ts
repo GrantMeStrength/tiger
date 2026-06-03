@@ -13,6 +13,7 @@ export interface Project {
   id: string;
   name: string;
   repoPath: string;
+  githubRepo?: string; // optional override: "owner/repo" — used as --repo for all gh pr commands
   description: string;
   defaultCommand: string;
   defaultFlags: string[];

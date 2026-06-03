@@ -6,14 +6,21 @@ import type { Project, AgentRecord, AgentType } from "@/types";
 interface Props {
   project: Project;
   agents: AgentRecord[];
-  onLaunch: (params: { label: string; task: string; command: string; flags: string[]; agentType: AgentType }) => void;
+  onLaunch: (params: { label: string; task: string; command: string; flags: string[]; agentType: AgentType; model?: string }) => void;
   onClose: () => void;
 }
+
+const COPILOT_MODELS = [
+  { value: "", label: "Default" },
+  { value: "gpt-5", label: "GPT-5" },
+  { value: "claude-sonnet-4.5", label: "Claude Sonnet 4.5" },
+  { value: "o3", label: "o3" },
+  { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+];
 
 export function LaunchAgentModal({ project, agents, onLaunch, onClose }: Props) {
   const [agentType, setAgentType] = useState<AgentType>("copilot");
 
-  // Default labels: count existing agents of each type
   const terminalCount = agents.filter((a) => a.agentType === "terminal").length;
   const copilotCount = agents.filter((a) => a.agentType === "copilot").length;
   const defaultLabels: Record<AgentType, string> = {
@@ -21,11 +28,10 @@ export function LaunchAgentModal({ project, agents, onLaunch, onClose }: Props) 
     copilot: `Agent ${copilotCount + 1}`,
   };
 
-  const [label, setLabel] = useState(defaultLabels["copilot"]);
+  const [label, setLabel] = useState(defaultLabels.copilot);
   const [userEditedLabel, setUserEditedLabel] = useState(false);
   const [task, setTask] = useState("");
-  const [command, setCommand] = useState(project.defaultCommand);
-  const [flagsText, setFlagsText] = useState(project.defaultFlags.join(" "));
+  const [model, setModel] = useState("");
   const [launching, setLaunching] = useState(false);
 
   const isCopilot = agentType === "copilot";
@@ -34,8 +40,14 @@ export function LaunchAgentModal({ project, agents, onLaunch, onClose }: Props) 
     e.preventDefault();
     if (!label.trim()) return;
     setLaunching(true);
-    const flags = flagsText.trim() ? flagsText.trim().split(/\s+/) : [];
-    await onLaunch({ label: label.trim(), task: task.trim(), command: command.trim(), flags, agentType });
+    await onLaunch({
+      label: label.trim(),
+      task: task.trim(),
+      command: isCopilot ? "@github/copilot-sdk" : project.defaultCommand,
+      flags: isCopilot ? (model ? [model] : []) : project.defaultFlags,
+      agentType,
+      model: isCopilot && model ? model : undefined,
+    });
     setLaunching(false);
     onClose();
   };
@@ -68,23 +80,22 @@ export function LaunchAgentModal({ project, agents, onLaunch, onClose }: Props) 
           Launch Agent — {project.name}
         </h2>
 
-        {/* Agent type toggle */}
         <div style={{ display: "flex", gap: "6px", marginBottom: "18px" }}>
           <TypeToggle
             active={isCopilot}
             onClick={() => {
               setAgentType("copilot");
-              if (!userEditedLabel) setLabel(defaultLabels["copilot"]);
+              if (!userEditedLabel) setLabel(defaultLabels.copilot);
             }}
             icon="🤖"
             label="Copilot"
-            hint="gh copilot code"
+            hint="Chat via SDK"
           />
           <TypeToggle
             active={!isCopilot}
             onClick={() => {
               setAgentType("terminal");
-              if (!userEditedLabel) setLabel(defaultLabels["terminal"]);
+              if (!userEditedLabel) setLabel(defaultLabels.terminal);
             }}
             icon="💻"
             label="Terminal"
@@ -103,56 +114,45 @@ export function LaunchAgentModal({ project, agents, onLaunch, onClose }: Props) 
             />
           </Field>
 
-          {isCopilot && (
+          {isCopilot ? (
             <>
-              <Field label="Task / prompt" hint="Sent to the CLI via stdin on start (optional)">
+              <Field label="Task / prompt" hint="Sent as the first SDK message (optional)">
                 <textarea
                   value={task}
                   onChange={(e) => setTask(e.target.value)}
                   placeholder="Describe the task for the agent..."
-                  rows={3}
+                  rows={4}
                   style={{ ...inputStyle, resize: "vertical", fontFamily: "var(--font-sans)" }}
                 />
               </Field>
 
-              <Field label="Command" hint="The CLI command to run">
-                <input
-                  value={command}
-                  onChange={(e) => setCommand(e.target.value)}
-                  placeholder="gh copilot code"
-                  style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: "12px" }}
-                />
+              <Field label="Model">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {COPILOT_MODELS.map((option) => {
+                    const active = model === option.value;
+                    return (
+                      <button
+                        key={option.value || "default"}
+                        type="button"
+                        onClick={() => setModel(option.value)}
+                        style={{
+                          padding: "7px 10px",
+                          background: active ? "var(--color-accent-dim)" : "var(--color-bg)",
+                          border: `1px solid ${active ? "var(--color-accent)" : "var(--color-border)"}`,
+                          borderRadius: 8,
+                          color: active ? "var(--color-text)" : "var(--color-text-muted)",
+                          fontSize: 12,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </Field>
-
-              <Field label="Flags" hint="Space-separated flags">
-                <input
-                  value={flagsText}
-                  onChange={(e) => setFlagsText(e.target.value)}
-                  placeholder="--yolo --resume"
-                  style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: "12px" }}
-                />
-              </Field>
-
-              {/* Preview */}
-              <div
-                style={{
-                  background: "var(--color-bg)",
-                  border: "1px solid var(--color-border-subtle)",
-                  borderRadius: "6px",
-                  padding: "10px 12px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "11px",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                <span style={{ color: "var(--color-accent)" }}>$ </span>
-                {command}{flagsText ? ` ${flagsText}` : ""}
-                {task ? ` "${task}"` : ""}
-              </div>
             </>
-          )}
-
-          {!isCopilot && (
+          ) : (
             <div
               style={{
                 background: "var(--color-bg)",
@@ -261,4 +261,3 @@ const secondaryBtn: React.CSSProperties = {
   fontSize: "13px",
   cursor: "pointer",
 };
-

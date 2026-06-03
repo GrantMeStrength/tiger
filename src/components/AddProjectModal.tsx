@@ -8,6 +8,7 @@ interface Props {
   onAdd: (params: {
     name: string;
     repoPath: string;
+    githubRepo: string;
     description: string;
     defaultCommand: string;
     defaultFlags: string[];
@@ -18,6 +19,7 @@ interface Props {
 export function AddProjectModal({ defaultCommand, defaultFlags, onAdd, onClose }: Props) {
   const [name, setName] = useState("");
   const [repoPath, setRepoPath] = useState("");
+  const [githubRepo, setGithubRepo] = useState("");
   const [description, setDescription] = useState("");
   const [command, setCommand] = useState(defaultCommand);
   const [flagsText, setFlagsText] = useState(defaultFlags.join(" "));
@@ -30,6 +32,7 @@ export function AddProjectModal({ defaultCommand, defaultFlags, onAdd, onClose }
     await onAdd({
       name: name.trim(),
       repoPath: repoPath.trim(),
+      githubRepo: githubRepo.trim(),
       description: description.trim(),
       defaultCommand: command.trim(),
       defaultFlags: flagsText.trim() ? flagsText.trim().split(/\s+/) : [],
@@ -84,6 +87,15 @@ export function AddProjectModal({ defaultCommand, defaultFlags, onAdd, onClose }
               placeholder="/Users/you/Repos/my-project"
               style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: "12px" }}
               required
+            />
+          </Field>
+
+          <Field label="GitHub repo" hint="Override for gh pr commands: owner/repo (e.g. microsoftdocs/windows-dev-docs-pr)">
+            <input
+              value={githubRepo}
+              onChange={(e) => setGithubRepo(e.target.value)}
+              placeholder="owner/repo"
+              style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: "12px" }}
             />
           </Field>
 

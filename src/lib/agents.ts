@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from "child_process";
 import type { AgentRecord, AgentType } from "@/types";
+import { getPersistedAgents, savePersistedAgents, getAllPersistedAgents } from "@/lib/data";
 
 interface AgentEntry {
   record: AgentRecord;
@@ -16,8 +17,21 @@ declare global {
 function registry(): Map<string, AgentEntry> {
   if (!global.__tigerAgents) {
     global.__tigerAgents = new Map();
+    // Load persisted agent records from disk on first access
+    try {
+      for (const record of getAllPersistedAgents()) {
+        global.__tigerAgents.set(record.id, { record, process: null, output: [] });
+      }
+    } catch { /* ignore — disk unavailable */ }
   }
   return global.__tigerAgents;
+}
+
+function persistProjectAgents(projectId: string): void {
+  const records = Array.from(registry().values())
+    .map((e) => e.record)
+    .filter((r) => r.projectId === projectId);
+  try { savePersistedAgents(projectId, records); } catch { /* ignore */ }
 }
 
 export function getAgents(projectId?: string): AgentRecord[] {
@@ -37,6 +51,7 @@ export function getAgentOutput(id: string): string[] {
 export function registerTerminalAgent(params: {
   id: string;
   projectId: string;
+  agentType: AgentType;
   label: string;
   task: string;
   command: string;
@@ -49,7 +64,7 @@ export function registerTerminalAgent(params: {
   const record: AgentRecord = {
     id: params.id,
     projectId: params.projectId,
-    agentType: "terminal",
+    agentType: params.agentType,
     label: params.label,
     task: params.task,
     command: params.command,
@@ -63,6 +78,7 @@ export function registerTerminalAgent(params: {
   const output: string[] = [];
   if (params.errorMessage) output.push(`Error: ${params.errorMessage}`);
   registry().set(params.id, { record, process: null, output });
+  persistProjectAgents(params.projectId);
   return record;
 }
 
@@ -170,16 +186,37 @@ export function killAgent(id: string): boolean {
   entry.record.completedAt = new Date().toISOString();
   entry.output.push("─".repeat(60));
   entry.output.push("⊘ Agent killed");
+  persistProjectAgents(entry.record.projectId);
   return true;
 }
 
 export function removeAgent(id: string): void {
+  const entry = registry().get(id);
+  const projectId = entry?.record.projectId;
   registry().delete(id);
+  if (projectId) persistProjectAgents(projectId);
 }
 
 export function renameAgent(id: string, label: string): AgentRecord | undefined {
   const entry = registry().get(id);
   if (!entry) return undefined;
   entry.record.label = label;
+  persistProjectAgents(entry.record.projectId);
+  return entry.record;
+}
+
+// Update lifecycle fields (status, exitCode, completedAt, pid) — called by server.js via API
+// when a PTY exits. If expectedPid is provided, the update is skipped when the agent's
+// current pid no longer matches (e.g. the agent was relaunched before the old PTY's exit fired).
+export function updateAgentRecord(
+  id: string,
+  updates: Partial<Pick<AgentRecord, "status" | "exitCode" | "completedAt" | "pid">>,
+  expectedPid?: number | null
+): AgentRecord | undefined {
+  const entry = registry().get(id);
+  if (!entry) return undefined;
+  if (expectedPid !== undefined && entry.record.pid !== expectedPid) return entry.record;
+  Object.assign(entry.record, updates);
+  persistProjectAgents(entry.record.projectId);
   return entry.record;
 }

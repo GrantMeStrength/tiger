@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAgents, launchAgent, registerTerminalAgent } from "@/lib/agents";
+import { getAgents, registerTerminalAgent } from "@/lib/agents";
 import { getProject } from "@/lib/data";
 import { randomUUID } from "crypto";
 
@@ -27,17 +27,50 @@ export async function POST(
     if (!label) return NextResponse.json({ error: "label is required" }, { status: 400 });
 
     const agentId = randomUUID();
+    let pid: number | null = null;
+    let spawnFailed = false;
+    let errorMsg = "";
 
-    if (agentType === "terminal" || agentType === "copilot") {
-      // Both terminal and copilot agents run in a PTY — full interactive support
-      // Terminal: spawns bash; Copilot: spawns the configured command
-      let pid: number | null = null;
-      let spawnFailed = false;
-      let errorMsg = "";
+    if (agentType === "copilot") {
+      try {
+        const spawnRes = await fetch(`http://localhost:${INTERNAL_PORT}/_tiger/spawn-copilot-sdk`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agentId,
+            projectId: id,
+            repoPath: project.repoPath,
+            initialPrompt: task || "",
+            model: body.model || null,
+          }),
+        });
+        if (!spawnRes.ok) {
+          const errData = await spawnRes.json().catch(() => ({ error: "spawn failed" }));
+          spawnFailed = true;
+          errorMsg = errData.error ?? "spawn failed";
+        }
+      } catch (err) {
+        spawnFailed = true;
+        errorMsg = String(err);
+      }
 
-      const spawnCommand = agentType === "terminal" ? undefined : (command ?? project.defaultCommand);
-      const spawnArgs = agentType === "terminal" ? undefined : (flags ?? project.defaultFlags);
+      const record = registerTerminalAgent({
+        id: agentId,
+        projectId: id,
+        agentType,
+        label,
+        task,
+        command: "@github/copilot-sdk",
+        flags: body.model ? [body.model] : [],
+        repoPath: project.repoPath,
+        pid: null,
+        status: spawnFailed ? "failed" : "running",
+        errorMessage: spawnFailed ? errorMsg : undefined,
+      });
+      return NextResponse.json(record, { status: 201 });
+    }
 
+    if (agentType === "terminal") {
       try {
         const spawnRes = await fetch(`http://localhost:${INTERNAL_PORT}/_tiger/spawn-pty`, {
           method: "POST",
@@ -46,9 +79,9 @@ export async function POST(
             agentId,
             projectId: id,
             cwd: project.repoPath,
-            command: spawnCommand,
-            args: spawnArgs,
-            initialInput: task || undefined,
+            command: undefined,
+            args: undefined,
+            initialInput: undefined,
           }),
         });
         if (!spawnRes.ok) {
@@ -67,6 +100,7 @@ export async function POST(
       const record = registerTerminalAgent({
         id: agentId,
         projectId: id,
+        agentType,
         label,
         task,
         command: command ?? project.defaultCommand,
@@ -79,7 +113,6 @@ export async function POST(
       return NextResponse.json(record, { status: 201 });
     }
 
-    // Fallback for any future non-PTY agent types
     return NextResponse.json({ error: "Unknown agent type" }, { status: 400 });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });

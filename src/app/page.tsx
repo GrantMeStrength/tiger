@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { Project, AgentRecord } from "@/types";
 import { ProjectCard } from "@/components/ProjectCard";
 import { AddProjectModal } from "@/components/AddProjectModal";
@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [defaultCommand, setDefaultCommand] = useState("gh copilot code");
   const [defaultFlags, setDefaultFlags] = useState(["--yolo", "--resume"]);
   const [loading, setLoading] = useState(true);
+  const agentsRef = useRef<AgentRecord[]>([]);
 
   const fetchAll = useCallback(async () => {
     const [projRes, settingsRes] = await Promise.all([
@@ -46,24 +47,28 @@ export default function Dashboard() {
     fetchAll();
   }, [fetchAll]);
 
-  // Poll for running agent status updates
+  // Keep ref in sync so polling closure always sees fresh agents without re-creating interval
+  useEffect(() => { agentsRef.current = agents; }, [agents]);
+
+  // Poll for running agent status updates — stable interval, reads via ref
   useEffect(() => {
     const interval = setInterval(async () => {
-      const running = agents.filter((a) => a.status === "running");
+      const running = agentsRef.current.filter((a) => a.status === "running");
       if (running.length === 0) return;
       const updates = await Promise.all(
         running.map((a) =>
-          fetch(`/api/projects/${a.projectId}/agents/${a.id}`).then((r) => r.json())
+          fetch(`/api/projects/${a.projectId}/agents/${a.id}`)
+            .then((r) => r.ok ? r.json() : { ...a, status: "killed" as const })
         )
       );
       setAgents((prev) => {
         const map = new Map(prev.map((a) => [a.id, a]));
-        updates.forEach((u: AgentRecord) => map.set(u.id, u));
+        updates.forEach((u: AgentRecord) => { if (u.id) map.set(u.id, u); });
         return Array.from(map.values());
       });
     }, 2000);
     return () => clearInterval(interval);
-  }, [agents]);
+  }, []); // stable — reads agents via agentsRef
 
   const handleDelete = async (id: string) => {
     await fetch(`/api/projects/${id}`, { method: "DELETE" });
@@ -113,7 +118,7 @@ export default function Dashboard() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text)", letterSpacing: "-0.02em" }}>
-            Tiger
+            🐯 Tiger
           </span>
           {totalRunning > 0 && (
             <span style={{
@@ -161,7 +166,32 @@ export default function Dashboard() {
         {loading ? (
           <div style={{ color: "var(--color-text-faint)", fontSize: 12, padding: "80px 0", textAlign: "center" }}>—</div>
         ) : projects.length === 0 ? (
-          <div style={{ padding: "120px 0", textAlign: "center" }}>
+          <div style={{ padding: "80px 0", textAlign: "center" }}>
+            <pre style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "0.6em",
+              lineHeight: 1.3,
+              color: "var(--color-running)",
+              opacity: 0.5,
+              margin: "0 auto 28px",
+              display: "inline-block",
+              textAlign: "left",
+              userSelect: "none",
+              letterSpacing: "0.05em",
+            }}>
+{`⠀⠀⢀⡴⠁⠀⠀⠀⠀⣀⣤⣤⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⣾⠁⠀⢀⣠⣶⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠈⡏⠀⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⡇⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⢷⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠈⢿⣿⣿⣿⡿⠛⠉⠻⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠈⣿⣿⡟⠀⠀⠀⠀⠘⣿⣿⣿⡇⠀⢀⣤⠀⢠⡀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⢹⣿⣷⡀⠀⣀⣤⣿⣿⣿⣿⠁⠀⣾⡿⠷⠚⠁⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⢻⣿⣿⣿⣿⣿⣿⣿⣿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠈⢻⡿⣿⣿⡿⢿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠙⠾⠟⠁⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀`}
+            </pre>
             <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-muted)", marginBottom: 8, letterSpacing: "0.06em", textTransform: "uppercase" }}>
               No projects
             </div>

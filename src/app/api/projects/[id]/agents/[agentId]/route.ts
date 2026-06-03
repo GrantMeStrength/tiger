@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAgent, killAgent, removeAgent, renameAgent } from "@/lib/agents";
+import { getAgent, killAgent, removeAgent, renameAgent, updateAgentRecord } from "@/lib/agents";
+import type { AgentRecord } from "@/types";
 
 const INTERNAL_PORT = process.env.PORT ?? "3000";
 
@@ -17,10 +18,31 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string; agentId: string }> }
 ) {
-  const { agentId } = await params;
-  const { label } = await req.json();
-  if (!label?.trim()) return NextResponse.json({ error: "label is required" }, { status: 400 });
-  const updated = renameAgent(agentId, label.trim());
+  const { id, agentId } = await params;
+  const body = await req.json();
+
+  if ("label" in body && !("status" in body)) {
+    if (!body.label?.trim()) return NextResponse.json({ error: "label is required" }, { status: 400 });
+    const updated = renameAgent(agentId, body.label.trim());
+    if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(updated);
+  }
+
+  const agent = getAgent(agentId);
+  if (!agent) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (agent.projectId !== id) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const allowed = ["status", "exitCode", "completedAt", "pid"] as const;
+  const validStatuses = ["running", "completed", "failed", "killed"] as const;
+  const updates: Partial<Pick<AgentRecord, "status" | "exitCode" | "completedAt" | "pid">> = {};
+  for (const field of allowed) {
+    if (field in body) (updates as Record<string, unknown>)[field] = body[field];
+  }
+  if (updates.status && !validStatuses.includes(updates.status)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+
+  const updated = updateAgentRecord(agentId, updates, body.expectedPid);
   if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(updated);
 }
@@ -40,13 +62,20 @@ export async function DELETE(
 
   const agent = getAgent(agentId);
 
-  // Kill PTY via server.js if this is a terminal agent
   if (agent?.agentType === "terminal" && agent.status === "running") {
     await fetch(`http://localhost:${INTERNAL_PORT}/_tiger/kill-pty`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agentId }),
     }).catch(() => { /* ignore — PTY may have already exited */ });
+  }
+
+  if (agent?.agentType === "copilot" && agent.status === "running") {
+    await fetch(`http://localhost:${INTERNAL_PORT}/_tiger/kill-copilot-sdk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId }),
+    }).catch(() => { /* ignore — session may have already disconnected */ });
   }
 
   const killed = killAgent(agentId);

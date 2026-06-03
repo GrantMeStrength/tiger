@@ -73,11 +73,14 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 
 interface SettingsPanelProps {
   isFirstRun?: boolean;
+  project?: { id: string; name: string; repoPath: string };
   onClose: () => void;
 }
 
-export function SettingsPanel({ isFirstRun = false, onClose }: SettingsPanelProps) {
+export function SettingsPanel({ isFirstRun = false, project, onClose }: SettingsPanelProps) {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
+  const [projectName, setProjectName] = useState(project?.name ?? "");
+  const [projectPath, setProjectPath] = useState(project?.repoPath ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +100,7 @@ export function SettingsPanel({ isFirstRun = false, onClose }: SettingsPanelProp
     setSaving(true);
     setError(null);
     try {
+      // Save global settings
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,6 +110,20 @@ export function SettingsPanel({ isFirstRun = false, onClose }: SettingsPanelProp
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Save failed");
       }
+
+      // Save project-specific fields if a project is open
+      if (project) {
+        const pRes = await fetch(`/api/projects/${project.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: projectName.trim(), repoPath: projectPath.trim() }),
+        });
+        if (!pRes.ok) {
+          const data = await pRes.json().catch(() => ({}));
+          throw new Error(data.error ?? "Project save failed");
+        }
+      }
+
       setSaved(true);
       setTimeout(() => {
         setSaved(false);
@@ -146,6 +164,26 @@ export function SettingsPanel({ isFirstRun = false, onClose }: SettingsPanelProp
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "4px 24px 16px" }}>
+
+          {project && (
+            <>
+              <SectionHeader>Project</SectionHeader>
+              <Field
+                label="Name"
+                value={projectName}
+                onChange={setProjectName}
+                placeholder="My Project"
+              />
+              <Field
+                label="Repo Path"
+                hint="Absolute path to the local git clone. Used for git, PR panel, and agent working directory."
+                value={projectPath}
+                onChange={setProjectPath}
+                placeholder="/Users/you/repos/my-project"
+                mono
+              />
+            </>
+          )}
 
           <SectionHeader>Appearance</SectionHeader>
           <div style={{ marginBottom: 18 }}>

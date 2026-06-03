@@ -111,6 +111,11 @@ html, body {
   91% { opacity: 0.95; }
 }
 
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 /* Light theme — zinc whites, same blue accent */
 [data-theme="light"] {
   --color-bg: #ffffff;
@@ -127,4 +132,34 @@ html, body {
   --color-warning: #d97706;
   --color-error: #dc2626;
   --color-running: #2563eb;
+}
+
+/* ── Copilot chat markdown (retro terminal) ───────────────────────────────── */
+.copilot-markdown { color: inherit; }
+.copilot-markdown p  { margin: 0 0 0.5em; }
+.copilot-markdown p:last-child { margin-bottom: 0; }
+.copilot-markdown h1,.copilot-markdown h2,.copilot-markdown h3 { color: inherit; font-size: 1em; font-weight: 700; margin: 0.6em 0 0.3em; }
+.copilot-markdown code { background: rgba(255,184,0,0.12); border: 1px solid rgba(255,184,0,0.3); border-radius: 3px; padding: 0 4px; font-family: var(--font-mono); font-size: 0.92em; color: inherit; }
+.copilot-markdown pre  { background: rgba(255,184,0,0.06); border: 1px solid rgba(255,184,0,0.18); border-radius: 4px; padding: 10px 12px; overflow-x: auto; margin: 0.4em 0; }
+.copilot-markdown pre code { background: none; border: none; padding: 0; }
+.copilot-markdown ul,.copilot-markdown ol { padding-left: 1.4em; margin: 0.3em 0; }
+.copilot-markdown li { margin: 0.15em 0; }
+.copilot-markdown blockquote { border-left: 2px solid rgba(255,184,0,0.5); padding-left: 10px; margin: 0.4em 0; opacity: 0.8; }
+.copilot-markdown strong { color: #ffd040; font-weight: 700; }
+.copilot-markdown a { color: #ffb800; text-decoration: underline; }
+.copilot-markdown hr { border: none; border-top: 1px solid rgba(255,184,0,0.25); margin: 0.6em 0; }
+
+/* ── Animated status pulse ───────────────────────────────────────────────── */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 var(--color-running); }
+  50%       { opacity: 0.85; transform: scale(1.25); box-shadow: 0 0 0 5px transparent; }
+}
+.status-pulse {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-running);
+  animation: status-pulse 1.6s ease-in-out infinite;
+  flex-shrink: 0;
 }

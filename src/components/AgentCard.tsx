@@ -125,12 +125,16 @@ export function AgentCard({ agent, selected, onSelect, onKill, onRemove, onRenam
             <span style={{ fontSize: "11px", color, letterSpacing: "0.01em" }}>
               {agent.status}
             </span>
-            <span style={{ fontSize: "11px", color: "var(--color-text-faint)" }}>
+            <span style={{ fontSize: "11px", color: "var(--color-text-faint)", fontFamily: "var(--font-mono)", minWidth: "4.5ch", display: "inline-block" }}>
               {elapsedStr}
             </span>
-            {agent.agentType === "terminal" && (
-              <span style={{ fontSize: "10px", color: "var(--color-text-faint)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                term
+            {agent.agentType === "terminal" ? (
+              <span style={{ fontSize: "10px", color: "#33ff33", letterSpacing: "0.04em", textTransform: "uppercase", opacity: 0.7 }}>
+                ● term
+              </span>
+            ) : (
+              <span style={{ fontSize: "10px", color: "#ffb000", letterSpacing: "0.04em", textTransform: "uppercase", opacity: 0.7 }}>
+                ● agent
               </span>
             )}
           </div>

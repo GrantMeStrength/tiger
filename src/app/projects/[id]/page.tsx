@@ -6,17 +6,26 @@ import dynamic from "next/dynamic";
 import type { Project, AgentRecord, AgentType } from "@/types";
 import { AgentCard } from "@/components/AgentCard";
 import { LaunchAgentModal } from "@/components/LaunchAgentModal";
+import { AddProjectModal } from "@/components/AddProjectModal";
 import PlannerPanel from "@/components/PlannerPanel";
 import GitPanel from "@/components/GitPanel";
 import ContextPanel from "@/components/ContextPanel";
 import MemoryPanel from "@/components/MemoryPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import PRPanel from "@/components/PRPanel";
+import CopilotAgentView from "@/components/CopilotAgentView";
 
-// xterm.js must not render on server
 const TerminalAgentView = dynamic(() => import("@/components/TerminalAgentView"), { ssr: false });
 
-type ActiveView = "session" | "context" | "plan" | "git" | "memory";
+type ActiveView = "session" | "context" | "plan" | "git" | "memory" | "pr";
+
+interface Notification {
+  id: string;
+  agentLabel: string;
+  exitCode: number;
+  ts: number;
+}
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -26,16 +35,17 @@ export default function ProjectPage() {
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("session");
-  const [output, setOutput] = useState<string[]>([]);
   const [showLaunch, setShowLaunch] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const outputRef = useRef<HTMLDivElement>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showAddProject, setShowAddProject] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notFoundAgents, setNotFoundAgents] = useState<Set<string>>(new Set());
+  const [relaunchKeys, setRelaunchKeys] = useState<Record<string, number>>({});
+  const notifiedAgents = useRef<Set<string>>(new Set());
 
   const selectedAgent = agents.find((a) => a.id === selectedAgentId) ?? null;
 
-  // Fetch project + agents
   const fetchData = useCallback(async () => {
     const [projRes, agentsRes] = await Promise.all([
       fetch(`/api/projects/${id}`),
@@ -52,10 +62,12 @@ export default function ProjectPage() {
   }, [id]);
 
   useEffect(() => {
-    fetchData();
+    const timeout = setTimeout(() => {
+      void fetchData();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [fetchData]);
 
-  // Fetch all projects for the horizontal strip
   useEffect(() => {
     fetch("/api/projects").then((r) => r.json()).then(setAllProjects).catch(() => {});
     const t = setInterval(() => {
@@ -64,49 +76,7 @@ export default function ProjectPage() {
     return () => clearInterval(t);
   }, []);
 
-  // Poll output — only for copilot agents
-  useEffect(() => {
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    if (!selectedAgentId || selectedAgent?.agentType === "terminal") return;
-
-    let lineCount = 0;
-    let aborted = false;
-
-    const poll = async () => {
-      if (aborted) return;
-      const res = await fetch(`/api/projects/${id}/agents/${selectedAgentId}/output?since=${lineCount}`);
-      if (aborted) return;
-      if (!res.ok) return;
-      const data = await res.json();
-      if (aborted) return;
-      if (data.lines?.length > 0) {
-        setOutput((prev) => [...prev, ...data.lines]);
-        lineCount = data.total;
-      }
-      if (data.status !== "running") {
-        setAgents((prev) => prev.map((a) => a.id === selectedAgentId ? { ...a, status: data.status, exitCode: data.exitCode } : a));
-        if (pollingRef.current) clearInterval(pollingRef.current);
-      }
-    };
-
-    setOutput([]);
-    poll();
-    pollingRef.current = setInterval(poll, 500);
-    return () => {
-      aborted = true;
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, selectedAgentId, selectedAgent?.agentType]);
-
-  // Auto-scroll
-  useEffect(() => {
-    if (autoScroll && outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
-    }
-  }, [output, autoScroll]);
-
-  const handleLaunch = async (params: { label: string; task: string; command: string; flags: string[]; agentType: AgentType }) => {
+  const handleLaunch = async (params: { label: string; task: string; command: string; flags: string[]; agentType: AgentType; model?: string }) => {
     const res = await fetch(`/api/projects/${id}/agents`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -115,7 +85,6 @@ export default function ProjectPage() {
     const agent = await res.json();
     setAgents((prev) => [agent, ...prev]);
     setSelectedAgentId(agent.id);
-    setOutput([]);
     setActiveView("session");
   };
 
@@ -142,6 +111,76 @@ export default function ProjectPage() {
     setAgents((prev) => prev.map((a) => a.id === agentId ? { ...a, label } : a));
   };
 
+  const handleAgentExit = useCallback((agentId: string, exitCode: number) => {
+    if (notifiedAgents.current.has(agentId)) return;
+    notifiedAgents.current.add(agentId);
+
+    const agent = agents.find((a) => a.id === agentId);
+    const label = agent?.label ?? "Agent";
+
+    setAgents((prev) => prev.map((a) => a.id === agentId ? { ...a, status: "completed" as const } : a));
+
+    const notifId = `${agentId}-${Date.now()}`;
+    setNotifications((prev) => [...prev, { id: notifId, agentLabel: label, exitCode, ts: Date.now() }]);
+    setTimeout(() => setNotifications((prev) => prev.filter((n) => n.id !== notifId)), 6000);
+
+    fetch(`/api/projects/${id}/agents`).then((r) => r.json()).then(setAgents).catch(() => {});
+  }, [agents, id]);
+
+  const handleNotFound = useCallback((agentId: string) => {
+    setAgents((prev) => prev.map((a) => a.id === agentId ? { ...a, status: "killed" as const } : a));
+    setNotFoundAgents((prev) => new Set([...prev, agentId]));
+  }, []);
+
+  const handleRelaunch = useCallback(async (agentId: string) => {
+    const res = await fetch(`/api/projects/${id}/agents/${agentId}/relaunch`, { method: "POST" });
+    if (!res.ok) return;
+    const updated = await res.json();
+    setAgents((prev) => prev.map((a) => a.id === agentId ? updated : a));
+    setNotFoundAgents((prev) => {
+      const next = new Set(prev);
+      next.delete(agentId);
+      return next;
+    });
+    notifiedAgents.current.delete(agentId);
+    setRelaunchKeys((prev) => ({ ...prev, [agentId]: (prev[agentId] ?? 0) + 1 }));
+  }, [id]);
+
+  const handleRestartCopilot = useCallback(async (agentId: string) => {
+    const agent = agents.find((a) => a.id === agentId);
+    if (!agent || !project) return;
+    setAgents((prev) => prev.map((a) => a.id === agentId ? { ...a, status: "running" as const } : a));
+    try {
+      const res = await fetch(`/_tiger/spawn-copilot-sdk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId, projectId: id, repoPath: project.repoPath, initialPrompt: null, model: null }),
+      });
+      if (!res.ok) {
+        setAgents((prev) => prev.map((a) => a.id === agentId ? { ...a, status: "failed" as const } : a));
+      } else {
+        await fetch(`/api/projects/${id}/agents/${agentId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "running" }),
+        });
+      }
+    } catch {
+      setAgents((prev) => prev.map((a) => a.id === agentId ? { ...a, status: "failed" as const } : a));
+    }
+  }, [agents, id, project]);
+
+  const handleAddProject = async (params: Omit<Project, "id" | "createdAt">) => {
+    const res = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    const nextProject = await res.json();
+    setShowAddProject(false);
+    router.push(`/projects/${nextProject.id}`);
+  };
+
   if (!project) {
     return (
       <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-faint)", background: "var(--color-bg)" }}>
@@ -152,8 +191,6 @@ export default function ProjectPage() {
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "var(--color-bg)" }}>
-
-      {/* Header */}
       <header style={{
         borderBottom: "1px solid var(--color-border-subtle)",
         padding: "0 20px",
@@ -168,7 +205,7 @@ export default function ProjectPage() {
           onClick={() => router.push("/")}
           style={{ background: "none", border: "none", color: "var(--color-text-faint)", fontSize: 13, fontWeight: 700, cursor: "pointer", letterSpacing: "-0.02em", padding: 0 }}
         >
-          Tiger
+          🐯 Tiger
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -176,20 +213,19 @@ export default function ProjectPage() {
             onClick={() => setShowLaunch(true)}
             style={{ padding: "5px 12px", background: "var(--color-accent)", border: "none", color: "#fff", fontSize: 12, fontWeight: 500, cursor: "pointer", borderRadius: 5 }}
           >
-            + Agent
+            + Session
           </button>
           <ThemeToggle />
           <button
             onClick={() => setShowSettings(true)}
             title="Settings"
             style={{ padding: "5px 8px", background: "none", border: "none", color: "var(--color-text-faint)", fontSize: 14, cursor: "pointer", lineHeight: 1 }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-muted)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-faint)"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-text-muted)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-text-faint)"; }}
           >⚙</button>
         </div>
       </header>
 
-      {/* Horizontal project strip */}
       <div style={{
         borderBottom: "1px solid var(--color-border-subtle)",
         display: "flex",
@@ -221,19 +257,33 @@ export default function ProjectPage() {
                 flexShrink: 0,
                 transition: "background 0.1s, color 0.1s",
               }}
-              onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-muted)"; }}
-              onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-faint)"; }}
+              onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = "var(--color-text-muted)"; }}
+              onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = "var(--color-text-faint)"; }}
             >
               {p.name}
             </button>
           );
         })}
+        <button
+          onClick={() => setShowAddProject(true)}
+          title="Add new project"
+          style={{
+            padding: "4px 10px",
+            background: "none",
+            border: "none",
+            color: "var(--color-text-faint)",
+            fontSize: 16,
+            cursor: "pointer",
+            flexShrink: 0,
+            lineHeight: 1,
+            marginLeft: 2,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--color-text-muted)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--color-text-faint)"; }}
+        >+</button>
       </div>
 
-      {/* Body: sidebar + main content */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
-
-        {/* Left sidebar */}
         <div style={{
           width: 240,
           flexShrink: 0,
@@ -243,7 +293,6 @@ export default function ProjectPage() {
           overflow: "hidden",
           background: "var(--color-surface)",
         }}>
-          {/* Sessions section */}
           <div style={{
             padding: "10px 12px 6px",
             fontSize: 10,
@@ -285,12 +334,11 @@ export default function ProjectPage() {
             )}
           </div>
 
-          {/* Tool nav — pinned at bottom, styled to match AgentCard */}
           <div style={{ borderTop: "1px solid var(--color-border-subtle)", padding: "6px 0", flexShrink: 0 }}>
-            {(["context", "plan", "git", "memory"] as const).map((view) => {
-              const labels = { context: "Context", plan: "Plan", git: "Git", memory: "Memory" };
-              const subtitles = { context: "Brief & conventions", plan: "Tasks & priorities", git: "Status & diff", memory: "Agent notes" };
-              const icons = { context: "◈", plan: "☰", git: "⎇", memory: "◉" };
+            {(["context", "plan", "git", "memory", "pr"] as const).map((view) => {
+              const labels = { context: "Context", plan: "To Do", git: "Git", memory: "Memory", pr: "PRs" };
+              const subtitles = { context: "Brief & conventions", plan: "Tasks & priorities", git: "Status & diff", memory: "Agent notes", pr: "Review & approve" };
+              const icons = { context: "◈", plan: "☰", git: "⎇", memory: "◉", pr: "⌥" };
               const isActive = activeView === view;
               return (
                 <div
@@ -303,8 +351,8 @@ export default function ProjectPage() {
                     background: isActive ? "var(--color-surface-raised)" : "transparent",
                     transition: "background 0.1s",
                   }}
-                  onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = "var(--color-surface-raised)"; }}
-                  onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--color-surface-raised)"; }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 12, color: isActive ? "var(--color-accent)" : "var(--color-text-faint)", lineHeight: 1 }}>
@@ -323,40 +371,39 @@ export default function ProjectPage() {
           </div>
         </div>
 
-        {/* Main content */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-
-          {/* Context panel */}
           {activeView === "context" && (
             <div style={{ flex: 1, overflow: "auto" }}>
               <ContextPanel projectId={id} />
             </div>
           )}
 
-          {/* Plan panel */}
           {activeView === "plan" && (
             <div style={{ flex: 1, overflow: "auto" }}>
               <PlannerPanel projectId={id} />
             </div>
           )}
 
-          {/* Git panel */}
           {activeView === "git" && (
             <div style={{ flex: 1, overflow: "auto" }}>
               <GitPanel projectId={id} />
             </div>
           )}
 
-          {/* Memory panel */}
           {activeView === "memory" && (
             <div style={{ flex: 1, overflow: "hidden" }}>
               <MemoryPanel projectId={id} />
             </div>
           )}
 
-          {/* Terminal sessions — always mounted to preserve terminal connections and history */}
+          {activeView === "pr" && (
+            <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <PRPanel projectId={id} githubRepo={project.githubRepo} />
+            </div>
+          )}
+
           <div style={{ flex: 1, display: activeView === "session" ? "flex" : "none", flexDirection: "column", overflow: "hidden" }}>
-            {agents.filter(a => a.agentType === "terminal" || a.agentType === "copilot").map(agent => (
+            {agents.filter((agent) => agent.agentType === "terminal" || agent.agentType === "copilot").map((agent) => (
               <div
                 key={agent.id}
                 style={{ flex: 1, display: selectedAgentId === agent.id ? "flex" : "none", flexDirection: "column", overflow: "hidden" }}
@@ -370,20 +417,92 @@ export default function ProjectPage() {
                   flexShrink: 0,
                 }}>
                   <span style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text)" }}>{agent.label}</span>
-                  <span style={{ fontSize: 11, color: agent.status === "running" ? "var(--color-running)" : "var(--color-text-faint)" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: agent.status === "running" ? "var(--color-running)" : "var(--color-text-faint)" }}>
+                    {agent.status === "running" && <span className="status-pulse" />}
                     {agent.status}
                   </span>
                   <span style={{ fontSize: 11, color: "var(--color-text-faint)", fontFamily: "var(--font-mono)" }}>
                     {project.repoPath.split("/").pop()}
                   </span>
+                  <div style={{ flex: 1 }} />
+                  {agent.agentType === "copilot" && agent.status !== "running" && (
+                    <button
+                      onClick={() => handleRestartCopilot(agent.id)}
+                      title="Resume or restart this Copilot session"
+                      style={{
+                        background: "rgba(251,191,36,0.12)",
+                        border: "1px solid rgba(251,191,36,0.35)",
+                        borderRadius: 5,
+                        color: "#fbbf24",
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        cursor: "pointer",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      ↺ Restart
+                    </button>
+                  )}
+                  {agent.agentType === "terminal" && notFoundAgents.has(agent.id) && (
+                    <button
+                      onClick={() => handleRelaunch(agent.id)}
+                      title="Re-spawn this agent's terminal session"
+                      style={{
+                        background: "rgba(251,191,36,0.12)",
+                        border: "1px solid rgba(251,191,36,0.35)",
+                        borderRadius: 5,
+                        color: "#fbbf24",
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        cursor: "pointer",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      ↺ Relaunch
+                    </button>
+                  )}
+                  {agent.agentType === "terminal" && (
+                    <button
+                      onClick={() => setShowHistory((current) => !current)}
+                      title={showHistory ? "Back to terminal" : "View full session history"}
+                      style={{
+                        background: showHistory ? "var(--color-accent-subtle, rgba(255,255,255,0.08))" : "transparent",
+                        border: `1px solid ${showHistory ? "var(--color-border)" : "var(--color-border-subtle)"}`,
+                        borderRadius: 5,
+                        color: "var(--color-text-faint)",
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        cursor: "pointer",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      {showHistory ? "✕ terminal" : "📜 history"}
+                    </button>
+                  )}
                 </div>
-                <div style={{ flex: 1, overflow: "hidden", background: "#09090b" }}>
-                  <TerminalAgentView agentId={agent.id} isActive={selectedAgentId === agent.id && activeView === "session"} phosphor={agent.agentType === "terminal" ? "green" : "amber"} />
+                <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", background: agent.agentType === "terminal" ? "#09090b" : "var(--color-bg)" }}>
+                  {agent.agentType === "copilot" ? (
+                    <CopilotAgentView
+                      agentId={agent.id}
+                      isActive={selectedAgentId === agent.id && activeView === "session"}
+                      onExit={handleAgentExit}
+                    />
+                  ) : (
+                    <TerminalAgentView
+                      key={`${agent.id}-${relaunchKeys[agent.id] ?? 0}`}
+                      agentId={agent.id}
+                      isActive={selectedAgentId === agent.id && activeView === "session"}
+                      phosphor="green"
+                      onExit={handleAgentExit}
+                      onNotFound={handleNotFound}
+                      showHistory={showHistory}
+                      onHistoryToggle={setShowHistory}
+                    />
+                  )}
                 </div>
               </div>
             ))}
 
-            {/* Fallback empty state */}
             {(!selectedAgent || (selectedAgent.agentType !== "terminal" && selectedAgent.agentType !== "copilot")) && (
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <span style={{ fontSize: 12, color: "var(--color-text-faint)" }}>
@@ -395,6 +514,46 @@ export default function ProjectPage() {
         </div>
       </div>
 
+      {notifications.length > 0 && (
+        <div style={{
+          position: "fixed",
+          top: 16,
+          right: 16,
+          zIndex: 1000,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          pointerEvents: "none",
+        }}>
+          {notifications.map((n) => (
+            <div
+              key={n.id}
+              style={{
+                background: "var(--color-surface-raised)",
+                border: `1px solid ${n.exitCode === 0 ? "#4ade80" : "#f87171"}`,
+                borderRadius: 8,
+                padding: "10px 14px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                minWidth: 220,
+                boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+                pointerEvents: "auto",
+                animation: "toast-in 0.2s ease",
+              }}
+            >
+              <span style={{ fontSize: 14 }}>{n.exitCode === 0 ? "✓" : "✗"}</span>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 500, color: "var(--color-text)" }}>{n.agentLabel}</div>
+                <div style={{ fontSize: 11, color: "var(--color-text-faint)" }}>
+                  exited {n.exitCode === 0 ? "successfully" : `with code ${n.exitCode}`}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {showLaunch && (
         <LaunchAgentModal
           project={project}
@@ -405,9 +564,17 @@ export default function ProjectPage() {
       )}
 
       {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
+        <SettingsPanel project={project ? { id: project.id, name: project.name, repoPath: project.repoPath } : undefined} onClose={() => setShowSettings(false)} />
+      )}
+
+      {showAddProject && (
+        <AddProjectModal
+          defaultCommand={project.defaultCommand ?? "gh copilot code"}
+          defaultFlags={project.defaultFlags ?? []}
+          onAdd={handleAddProject}
+          onClose={() => setShowAddProject(false)}
+        />
       )}
     </div>
   );
 }
-

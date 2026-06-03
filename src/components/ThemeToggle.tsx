@@ -33,7 +33,7 @@ export function ThemeToggle() {
       onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-muted)"; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-faint)"; }}
     >
-      {theme === "dark" ? "○" : "●"}
+      {theme === "dark" ? "🌙" : "☀️"}
     </button>
   );
 }

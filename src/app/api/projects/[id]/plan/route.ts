@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getTasks, addTask, updateTask, deleteTask, getProject } from "@/lib/data";
+import { getTasks, addTask, updateTask, deleteTask, saveTasks, getProject } from "@/lib/data";
 import type { PlannerTask } from "@/types";
 
 type Params = Promise<{ id: string }>;
@@ -40,6 +40,21 @@ export async function PUT(req: NextRequest, { params }: { params: Params }) {
   } catch {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Params }) {
+  const { id } = await params;
+  if (!getProject(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const { orderedIds } = await req.json();
+  if (!Array.isArray(orderedIds)) return NextResponse.json({ error: "orderedIds required" }, { status: 400 });
+  const tasks = getTasks(id);
+  const taskMap = new Map(tasks.map((t) => [t.id, t]));
+  const reordered = (orderedIds as string[]).map((tid) => taskMap.get(tid)).filter(Boolean) as PlannerTask[];
+  // Append any tasks missing from orderedIds as a safety net
+  const reorderedSet = new Set(orderedIds as string[]);
+  tasks.filter((t) => !reorderedSet.has(t.id)).forEach((t) => reordered.push(t));
+  saveTasks(id, reordered);
+  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Params }) {

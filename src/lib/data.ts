@@ -1,13 +1,14 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
-import type { AppData, Project, PlannerTask, Settings } from "@/types";
+import type { AppData, Project, PlannerTask, Settings, AgentRecord } from "@/types";
 
 const DATA_DIR = path.join(os.homedir(), ".tiger");
 const DATA_FILE = path.join(DATA_DIR, "data.json");
 const PLANS_DIR = path.join(DATA_DIR, "plans");
 const MEMORY_DIR = path.join(DATA_DIR, "memory");
 const CONTEXT_DIR = path.join(DATA_DIR, "context");
+const AGENTS_DIR = path.join(DATA_DIR, "agents");
 
 const DEFAULT_DATA: AppData = {
   settings: {
@@ -18,7 +19,7 @@ const DEFAULT_DATA: AppData = {
 };
 
 function ensureDir() {
-  for (const dir of [DATA_DIR, PLANS_DIR, MEMORY_DIR, CONTEXT_DIR]) {
+  for (const dir of [DATA_DIR, PLANS_DIR, MEMORY_DIR, CONTEXT_DIR, AGENTS_DIR]) {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   }
 }
@@ -93,7 +94,7 @@ export function getTasks(projectId: string): PlannerTask[] {
   }
 }
 
-function saveTasks(projectId: string, tasks: PlannerTask[]) {
+export function saveTasks(projectId: string, tasks: PlannerTask[]) {
   ensureDir();
   fs.writeFileSync(planFile(projectId), JSON.stringify(tasks, null, 2), "utf-8");
 }
@@ -178,4 +179,32 @@ export function saveContext(projectId: string, sections: import("@/types").Conte
   const brief: import("@/types").ContextBrief = { sections, updatedAt: new Date().toISOString() };
   fs.writeFileSync(contextFile(projectId), JSON.stringify(brief, null, 2), "utf-8");
   return brief;
+}
+
+// ── Agent Record Persistence ───────────────────────────────────────────────────
+
+export function getPersistedAgents(projectId: string): AgentRecord[] {
+  ensureDir();
+  const file = path.join(AGENTS_DIR, `${projectId}.json`);
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf-8")) as AgentRecord[];
+  } catch {
+    return [];
+  }
+}
+
+export function savePersistedAgents(projectId: string, records: AgentRecord[]): void {
+  ensureDir();
+  fs.writeFileSync(path.join(AGENTS_DIR, `${projectId}.json`), JSON.stringify(records, null, 2), "utf-8");
+}
+
+export function getAllPersistedAgents(): AgentRecord[] {
+  ensureDir();
+  try {
+    return fs.readdirSync(AGENTS_DIR)
+      .filter((f) => f.endsWith(".json"))
+      .flatMap((f) => getPersistedAgents(f.replace(".json", "")));
+  } catch {
+    return [];
+  }
 }
